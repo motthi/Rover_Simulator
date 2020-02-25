@@ -186,15 +186,16 @@ class IdealSensor:
 
 #ロボットの行動を決定するエージェントクラス
 class Agent:
-    def __init__(self, goal_pos=[0, 0]):
+    def __init__(self, goal_pos=[0, 0], motor=[0, 0]):
         self.nu = 0    #直進速度の初期化
         self.omega = 0    #回転速度の初期化
         self.goal_pos = goal_pos    #ゴール位置（エージェントはゴールの座標を知っている前提）
+        self.motorL, self.motorR = motor[0], motor[1]
         
     def action(self, pose):    #ローバーの移動速度を返す関数
         #このメソッドの中身はクラスを継承しオーバーライドすることで他の行動に変更することができる
         #メイン関数のクラスAgent2を参考
-        self.motor(50, 50)    #制御指令値を設定
+        self.motor(self.motorL, self.motorR)    #制御指令値を設定
         return self.nu, self.omega
     
     def motor(self, motorL=0, motorR=0):    #制御指令値からローバーの移動速度へ変換する関数
@@ -254,11 +255,12 @@ if __name__ == "__main__":    #ライブラリとして読み込む場合は実�
         goal_pos=goal    #ゴール座標
     )    #地図の実装
 
+    agent1 = Agent(motor=[10, 9])
     agent2 = Agent2(goal)    #エージェントの実装
 
     robot = IdealRobot(
         np.array([-50, -25, -math.pi/2]).T,    ##初期位置，姿勢
-        agent=agent2,    #ローバーが従うエージェント
+        agent=agent1,    #ローバーが従うエージェント
         sensor=IdealSensor(),   #ローバーに搭載されているセンサ
         color="blue"    #ローバの色（描画上の設定）
     )    #ロボットの実装
