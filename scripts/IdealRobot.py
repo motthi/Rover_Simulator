@@ -58,7 +58,7 @@ class World:
 
     def one_step(self, i, elems, ax):    #1ステップごとに呼び出される関数
         while elems: elems.pop().remove()    #描画されている図形を取り除く
-        if not (self.goal_pos[0] == None or self.goal_pos[1] == None):
+        if not (self.goal_pos[0] == None or self.goal_pos[1] == None):    #ゴールがある場合，描画する
             c = ax.scatter(
                 self.goal_pos[0]+0.032*self.xlim,
                 self.goal_pos[1]+0.1*self.ylim,
@@ -155,26 +155,28 @@ class IdealRobot:
 #ロボットが持つ理想的なセンサを構成するクラス
 class IdealSensor:
     def __init__(self):
-        self.pose = [0, 0, 0]    #ローバーの位置，姿勢
+        self.real_pose = [0, 0, 0]    #ローバーの真の位置，姿勢
+        self.pose = [0, 0, 0]    #センサから得られたローバの位置，姿勢
     
-    def data(self, obj_pos):
-        self.pose = obj_pos    #ローバーの位置，姿勢を更新
-        return  np.hstack([
-            self.getGPS(obj_pos),
-            self.getDirection(obj_pos)
+    def data(self, obj_pose):
+        self.real_pose = obj_pose    #ローバーの真の位置
+        self.pose = np.hstack([
+            self.getGPS(obj_pose),
+            self.getDirection(obj_pose)
         ])    #位置と姿勢を取り出し結合
+        return self.pose    #センサ値を返す
     
-    def getGPS(self, obj_pos):    #GPSから得られた座標を返す関数
-        return np.array([obj_pos[0], obj_pos[1]]).T    #位置を返す
+    def getGPS(self, pose):    #GPSから得られた座標を返す関数
+        return np.array([pose[0], pose[1]]).T    #位置を返す
     
-    def getDirection(self, obj_pos):    #地磁気センサから得られたローバの向きを返す関数
-        return np.array([obj_pos[2]]).T    #向きを返す
+    def getDirection(self, pose):    #地磁気センサから得られたローバの向きを返す関数
+        return np.array([pose[2]]).T    #向きを返す
     
     def draw(self, ax, elems):
         elems.append(
             ax.text(
-                self.pose[0]-2,    #センサ値を描画するX軸の値
-                self.pose[1]-2,    #センサ値を描画するY軸の値
+                self.real_pose[0]-2,    #センサ値を描画するX軸の値
+                self.real_pose[1]-2,    #センサ値を描画するY軸の値
                 "{:.1f},{:.1f},{:.1f}\n".format(float(self.pose[0]), float(self.pose[1]), float(self.pose[2]*180/math.pi)),    #描画するセンサ値,
                 fontsize=8    #描画する際のフォントサイズ
             )
@@ -255,12 +257,12 @@ if __name__ == "__main__":    #ライブラリとして読み込む場合は実�
         goal_pos=goal    #ゴール座標
     )    #地図の実装
 
-    agent1 = Agent(motor=[10, 9])
+    agent1 = Agent(motor=[0, 0])
     agent2 = Agent2(goal)    #エージェントの実装
 
     robot = IdealRobot(
         np.array([-50, -25, -math.pi/2]).T,    ##初期位置，姿勢
-        agent=agent1,    #ローバーが従うエージェント
+        agent=agent2,    #ローバーが従うエージェント
         sensor=IdealSensor(),   #ローバーに搭載されているセンサ
         color="blue"    #ローバの色（描画上の設定）
     )    #ロボットの実装
