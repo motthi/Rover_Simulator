@@ -4,7 +4,6 @@
 # In[1]:
 
 
-#%matplotlib inline
 import sys    #パス追加用
 sys.path.append("scripts/")    #自作モジュールが存在するパスの追加
 from IdealRobot import*    #IdealRobot.pyからWorld，IdealRobot，IdealSensor，Agentクラスの読み込み
@@ -72,10 +71,12 @@ class Robot(IdealRobot):    #IdealRobotクラスから継承
 
 
 class Sensor(IdealSensor):    #IdealSensorクラスから継承
-    def __init__(self, distance_noise_rate=0.1, direction_noise_rate=0.1):
+    def __init__(self, distance_noise_rate=0.1, direction_noise_rate=0.1, time_interval=None):
         super().__init__()
         self.distance_noise_rate = distance_noise_rate    #GPSの誤差の標準偏差
         self.direction_noise_rate = direction_noise_rate    #地磁気センサの誤差の標準偏差
+        self.time_interval = time_interval    #ステップ時間
+        self.i = -1    #カウント
         
     def noiseGPS(self):    #GPSの誤差を円座標系で求める関数
         r = norm.rvs(loc=0, scale=self.distance_noise_rate)    #距離の誤差，正規分布に従う
@@ -86,10 +87,21 @@ class Sensor(IdealSensor):    #IdealSensorクラスから継承
         return norm.rvs(loc=0, scale=self.direction_noise_rate)*math.pi/180    #誤差を返す，正規分布に従う
     
     def getGPS(self, pose):    #GPSから得られた座標を返す関数
-        r, theta = self.noiseGPS()    #GPSから得られた位置の誤差を求める
-        pose_x = pose[0] + r * math.cos(theta)    #X軸方向のセンサ値を求める
-        pose_y = pose[1] + r * math.sin(theta)    #Y軸方向のセンサ値を求める
-        return np.array([pose_x, pose_y]).T    #GPSから得られた位置を誤差を含めて返す
+        if not self.time_interval == None:    #ステップ時間を指定された場合は１秒間に１回更新する
+            if self.time_interval*self.i>=1 or self.i==-1:    #シミュレーション開始直後か前回の更新から１秒たった場合
+                r, theta = self.noiseGPS()    #GPSから得られた位置の誤差を求める
+                self.pose_x = pose[0] + r * math.cos(theta)    #X軸方向のセンサ値を求める
+                self.pose_y = pose[1] + r * math.sin(theta)    #Y軸方向のセンサ値を求める
+                self.i = 0    #カウントをリセット
+            else:
+                #位置の更新はしない
+                self.i += 1    #ステップをカウント
+        else:
+            #シミュレーション開始直後の場合はデータを得る
+            r, theta = self.noiseGPS()    #GPSから得られた位置の誤差を求める
+            self.pose_x = pose[0] + r * math.cos(theta)    #X軸方向のセンサ値を求める
+            self.pose_y = pose[1] + r * math.sin(theta)    #Y軸方向のセンサ値を求める            
+        return np.array([self.pose_x, self.pose_y]).T    #GPSから得られた位置を誤差を含めて返す
     
     def getDirection(self, pose):    #地磁気センサから得られたローバの向きを返す関数
         direction = pose[2] + self.noiseDirection()    #センサ値を求める
@@ -131,7 +143,7 @@ if __name__ == "__main__":    #ライブラリとして読み込む場合は実�
     time_finish = 20    #シミュレーション終了時間
     time_interval = 0.1    #ステップ時間
     goal = [75, 50]    #ゴールの座標
-    map_size = [100, 100]
+    map_size = [100, 100]    #マップサイズ
     
     world = World(
         time_finish,    #シミュレーション終了時間
@@ -147,7 +159,7 @@ if __name__ == "__main__":    #ライブラリとして読み込む場合は実�
     robot1 = Robot(
         np.array([-50, -75, -math.pi/4]).T,    ##初期位置，姿勢
         agent=agent2,    #ローバーが従うエージェント
-        sensor=Sensor(),   #ローバーに搭載されているセンサ
+        sensor=Sensor(time_interval=time_interval),   #ローバーに搭載されているセンサ
         color="blue",    #ローバの色（描画上の設定）
         #noise_per_meter=0,
         #bias_rate_stds=(0, 0)
@@ -163,7 +175,7 @@ if __name__ == "__main__":    #ライブラリとして読み込む場合は実�
     )    #ロボットの実装
     
     world.append(robot1)    #世界地図にローバーを組み込む
-    world.append(robot2)
+    #world.append(robot2)
     world.draw()    #世界地図の描画
 
 
