@@ -60,7 +60,7 @@ class World:
         while elems: elems.pop().remove()    #描画されている図形を取り除く
         if not (self.goal_pos[0] == None or self.goal_pos[1] == None):    #ゴールがある場合，描画する
             c = ax.scatter(
-                self.goal_pos[0]+0.032*self.xlim,
+                self.goal_pos[0]+0.034*self.xlim,
                 self.goal_pos[1]+0.1*self.ylim,
                 s=50,
                 marker=">",
@@ -69,7 +69,7 @@ class World:
             )    #旗の赤い部分を追加
             elems += ax.plot(
                 [self.goal_pos[0], self.goal_pos[0]],
-                [self.goal_pos[1], self.goal_pos[1]+0.12*self.ylim],
+                [self.goal_pos[1], self.goal_pos[1]+0.13*self.ylim],
                 color="black"
             )    #旗の棒を追加
         
@@ -213,7 +213,7 @@ class Agent:
         self.omega = motorR - motorL    #回転速度を求める
 
 
-# In[6]:
+# In[7]:
 
 
 if __name__ == "__main__":    #ライブラリとして読み込む場合は実行しない
