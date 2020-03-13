@@ -84,6 +84,8 @@ Simulator.ipynb[6]の最後に書かれている以下のコード
 `#world.ani.save('anm.gif, 'writer='pillow', fps=10)`  
 のコメントアウトを外すことでアニメーションを作業ディレクトリに保存することができる．  
 
+![result](https://github.com/pasises/Rover_Simulator/blob/gif/anm.gif)
+
 ## 参考文献
 上田隆一　『詳解　確率ロボティクス　Pythonによる基礎アルゴリズムの実装』 （講談社、2019）
 
