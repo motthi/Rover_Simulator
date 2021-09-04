@@ -1,4 +1,11 @@
-/.ipynb_checkpoints
-__pycache__/
-memo.txt
+__pycache__
+.ipynb_checkpoints
+.vscode
+.virtual_documents
+Untitled.ipynb
+sourcetrail
 *.gif
+*.png
+*.mp4
+*.bat
+*.jpg
