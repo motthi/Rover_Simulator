@@ -76,7 +76,6 @@ class Dijkstra(GridBasePathPlanning):
         start_pos: np.ndarray = None, goal_pos: np.ndarray = None,
         map: np.ndarray = None, map_grid_width: float = 1.0
     ):
-        super().__init__()
         self.grid_map = map
         self.grid_width = map_grid_width
         self.start_idx = self.poseToIndex(start_pos) if start_pos is not None else None
@@ -135,12 +134,12 @@ class Dijkstra(GridBasePathPlanning):
         idx = np.array([np.where(self.id_map == grid_id)[0][0], np.where(self.id_map == grid_id)[1][0]])
         self.open_list.remove([grid_id, cost_f, cost_g])  # オープンリストから削除
         self.closed_list.append([grid_id, cost_f, cost_g])  # クローズドリストに追加
-        self.calculateCost(idx, cost_f, cost_g)  # コストの計算
+        self.calculateCost(idx, cost_g)  # コストの計算
         return idx, cost_f
 
-    def calculateCost(self, idx, cost_f, cost_g):
+    def calculateCost(self, idx, cost_g):
         for n in self.listFreeNeigbor(idx):
-            evaluation_f = cost_g + self.cost(n) + self.__c(n, idx)
+            evaluation_f = cost_g + self.cost(n) + self.c(n, idx)
             if self.isOpened(n):
                 its_idx, its_cost_f, its_cost_g = self.open_list[[val[0] for val in self.open_list].index(self.id(n))]
                 if its_cost_f > evaluation_f:
@@ -189,8 +188,40 @@ class Dijkstra(GridBasePathPlanning):
     def b(self, u):
         return self.parent_id_map[int(u[0])][int(u[1])]
 
-    def __c(self, u, v):
+    def c(self, u, v):
         return np.linalg.norm(u - v)
+
+
+class Astar(Dijkstra):
+    def __init__(
+        self,
+        start_pos: np.ndarray = None, goal_pos: np.ndarray = None,
+        map: np.ndarray = None, map_grid_width: float = 1.0, heuristic=0.9
+    ):
+        super().__init__(start_pos, goal_pos, map, map_grid_width)
+        self.heuristic = heuristic
+        self.name = "Astar"
+
+    def calculateCost(self, idx, cost_g):  # コストの計算
+        for n in self.listFreeNeigbor(idx):
+            evaluation_f = cost_g + self.cost(n) + self.c(n, idx) + self.__h(n)  # 評価を計算
+            if self.isOpened(n):  # オープンリストに含まれているか
+                its_index, its_cost_f, its_cost_g = self.open_list[[val[0] for val in self.open_list].index(self.id(n))]
+                if its_cost_f > evaluation_f:  # 評価が更新されなければ繰り返しを戻す
+                    self.open_list.remove([its_index, its_cost_f, its_cost_g])
+                else:
+                    continue
+            elif self.isClosed(n):  # クローズドリストに含まれているか
+                its_index, its_cost_f, its_cost_g = self.closed_list[[val[0] for val in self.closed_list].index(self.id(n))]
+                if its_cost_f > evaluation_f:
+                    self.closed_list.remove([its_index, its_cost_f, its_cost_g])
+                else:
+                    continue
+            self.parent_id_map[n[0]][n[1]] = self.id(idx)
+            self.open_list.append([self.id(n), evaluation_f, evaluation_f - self.__h(n)])
+
+    def __h(self, u):
+        return 0.9 * np.linalg.norm(self.goal_idx - u)
 
 
 class DstarLite(GridBasePathPlanning):
