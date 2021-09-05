@@ -38,7 +38,7 @@ class History():
         self.estimated_poses.append(kwargs['estimated_pose'])
         self.sensing_results.append(kwargs['sensing_result'])
         if 'waypoints' in kwargs:
-            self.waypoints.append(kwargs['waypoints'])
+            self.waypoints.append(copy.copy(kwargs['waypoints']))
 
 
 class BasicRover(Rover):
@@ -119,12 +119,12 @@ class DWARover(BasicRover):
     def one_step(self, time_interval: float) -> None:
         # Collision Check
         if self.collision_detector.detect_collision(self):
-            self.history.append(real_pose=self.real_pose, estimated_pose=self.estimated_pose, sensing_result=[])
+            self.history.append(real_pose=self.real_pose, estimated_pose=self.estimated_pose, sensing_result=[], waypoints=self.waypoints)
             return
 
         # Goal Check
         if np.linalg.norm(self.waypoint[0:2] - self.estimated_pose[0:2]) < 1.0:
-            self.history.append(real_pose=self.real_pose, estimated_pose=self.estimated_pose, sensing_result=[])
+            self.history.append(real_pose=self.real_pose, estimated_pose=self.estimated_pose, sensing_result=[], waypoints=self.waypoints)
             return
 
         # Sensing
@@ -138,13 +138,14 @@ class DWARover(BasicRover):
 
         # Calculate Control Inputs
         control_inputs = self.controller.calculate_control_inputs(
-            self.estimated_pose, self.v, self.w, time_interval,
-            self.waypoint, sensed_obstacles
+            rover_pose=self.estimated_pose, dt=time_interval,
+            goal_pose=self.waypoint, obstacles=sensed_obstacles,
+            v=self.v, w=self.w,
         )
         self.v, self.w = control_inputs
 
         # Record
-        self.history.append(real_pose=self.real_pose, estimated_pose=self.estimated_pose, sensing_result=sensed_list)
+        self.history.append(real_pose=self.real_pose, estimated_pose=self.estimated_pose, sensing_result=sensed_list, waypoints=self.waypoints)
 
         # Move
         self.real_pose = state_transition(self.real_pose, control_inputs, time_interval)
@@ -164,7 +165,8 @@ class FollowRover(DWARover):
         history: History = None,
         color: str = "black", waypoint_color: str = 'blue',
         goal_pos: np.ndarray = np.array([18, 18]),
-        calculate_path_args=None
+        calculate_path_args=None,
+        waypoint_dist=3.0
     ) -> None:
         super().__init__(
             pose, radius,
@@ -178,10 +180,11 @@ class FollowRover(DWARover):
         self.calculate_path_args = calculate_path_args
         self.goal_poe = goal_pos
         self.cnt_waypoint = 0
+        self.waypoint_dist = waypoint_dist
 
     def one_step(self, time_interval: float) -> None:
         self.waypoint = self.waypoints[0]
-        while np.linalg.norm(self.estimated_pose[0:2] - self.waypoint[0:2]) < 2.0 and len(self.waypoints) > 1:
+        while np.linalg.norm(self.estimated_pose[0:2] - self.waypoint[0:2]) < self.waypoint_dist and len(self.waypoints) > 1:
             self.waypoints.pop(0)
             self.waypoint = self.waypoints[0]
         super().one_step(time_interval)
@@ -240,7 +243,7 @@ class OnlinePathPlanningRover(DWARover):
 
         # Set next waypoint
         self.waypoint = self.waypoints[0]
-        while np.linalg.norm(self.estimated_pose[0:2] - self.waypoint[0:2]) < 2.0 and len(self.waypoints) > 1:
+        while np.linalg.norm(self.estimated_pose[0:2] - self.waypoint[0:2]) < 3.0 and len(self.waypoints) > 1:
             self.waypoints.pop(0)
             self.waypoint = self.waypoints[0]
 
