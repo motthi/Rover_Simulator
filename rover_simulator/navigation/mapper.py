@@ -118,6 +118,8 @@ class GridMapper(Mapper):
                 if np.sqrt(i**2 + j**2) > r / self.grid_width + 1e-5:
                     continue
                 u = idx + np.array([i, j])
+                if self.isOutOfBounds(u):
+                    continue
                 self.map[u[0]][u[1]] = occupancy
                 updated_grids.append([u, occupancy])
         return updated_grids
