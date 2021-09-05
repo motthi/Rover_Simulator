@@ -1,10 +1,10 @@
-import os
 import re
 import sys
 import numpy as np
 import matplotlib.animation as anm
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
+from scipy.spatial import cKDTree
 from typing import List, Tuple
 from rover_simulator.core import*
 
@@ -35,6 +35,26 @@ class World():
             現状，最後のone_stepは保存されない
             """
 
+    def simulate_rover_to_goal(self, rover_idx: int, goal_pos: np.ndarray, goal_range: float = 2.0):
+        dist_to_goal = float('inf')
+        rover = self.rovers[rover_idx]
+        rover_poses = [rover.estimated_pose]
+        while dist_to_goal >= goal_range:
+            rover.one_step(self.time_interval)
+            self.step += 1
+            dist_to_goal = np.linalg.norm(rover.estimated_pose[0:2] - goal_pos[0:2])
+            rover_poses.append(rover.estimated_pose)
+            if len(rover_poses) > 50:
+                traversed_dist = 0.0
+                for i in range(50):
+                    traversed_dist += np.linalg.norm(rover_poses[i - 51][0:2] - rover_poses[i - 50][0:2])
+                if traversed_dist < 3.0:
+                    break
+        if dist_to_goal < goal_range:
+            return "Succeed"
+        else:
+            return "Failed"
+
     def one_step(self):
         for rover in self.rovers:
             rover.one_step(self.time_interval)
@@ -58,6 +78,35 @@ class World():
 
     def append_obstacle(self, obstacle: Obstacle):
         self.obstacles.append(obstacle)
+
+    def set_random_start_goal(
+        self,
+        x_range: List[float] = [0, 20], y_range: List[float] = [0, 20],
+        min_distnace: float = 0.0, max_distance: float = 20,
+        enlarged_obstacle=0.0
+    ) -> List[np.ndarray]:
+        if min_distnace > max_distance:
+            raise ValueError("min_distance must be lower than max_distance")
+        distance = -1.0
+        obstacle_kdTree = cKDTree([obstacle.pos for obstacle in self.obstacles])
+        is_collision = True
+        while distance < min_distnace or distance > max_distance or is_collision:
+            start_pos = np.array([np.random.uniform(x_range[0], x_range[1]), np.random.uniform(y_range[0], y_range[1])])
+            goal_pos = np.array([np.random.uniform(x_range[0], x_range[1]), np.random.uniform(y_range[0], y_range[1])])
+            distance = np.linalg.norm(start_pos - goal_pos)
+            dist_start, idx_start = obstacle_kdTree.query(start_pos, k=1)
+            dist_goal, idx_goal = obstacle_kdTree.query(goal_pos, k=1)
+            if dist_start < self.obstacles[idx_start].r + enlarged_obstacle or dist_goal < self.obstacles[idx_goal].r + enlarged_obstacle:
+                is_collision = True
+            else:
+                is_collision = False
+
+        return start_pos, goal_pos
+
+    def reset_world(self, reset_step: bool = True, reset_rovers: bool = True, reset_obstacles: bool = True):
+        self.step = 0 if reset_step is True else self.step
+        self.rovers = [] if reset_rovers is True else self.rovers
+        self.obstacles = [] if reset_obstacles is True else self.obstacles
 
     def reset(self):
         self.step = 0
@@ -231,7 +280,7 @@ class World():
 
                 # ロボットと障害物を結ぶ線を描写
                 xn, yn = np.array([x, y]) + np.array([distance * np.cos(angle), distance * np.sin(angle)])
-                elems += ax.plot([x, xn], [y, yn], color="mistyrose")
+                elems += ax.plot([x, xn], [y, yn], color="mistyrose", linewidth=0.8)
 
                 # Draw Enlarged Obstacle Regions
                 enl_obs = patches.Circle(xy=(xn, yn), radius=radius + rover.r, fc='blue', ec='blue', alpha=0.3)
