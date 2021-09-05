@@ -1,6 +1,7 @@
 import math
 import numpy as np
 from typing import List
+from scipy.spatial import cKDTree
 from rover_simulator.core import Controller, Obstacle
 from rover_simulator.utils import state_transition
 
@@ -172,7 +173,7 @@ class PathFollower(DWAController):
     def calculate_control_inputs(
         self,
         rover_pose: np.ndarray,
-        nu: float, omega: float, dt: float,
+        v: float, w: float, dt: float,
         goal_pose: np.ndarray,
         obstacles: List[Obstacle]
     ):
@@ -181,9 +182,149 @@ class PathFollower(DWAController):
             angle_to_goal -= 2 * np.pi
         while angle_to_goal < - np.pi:
             angle_to_goal += 2 * np.pi
-        if angle_to_goal > np.pi / 8:
+        if angle_to_goal > np.pi / 4:
             return 0.0, self.omega_max
-        elif angle_to_goal < -np.pi / 8:
+        elif angle_to_goal < -np.pi / 4:
             return 0.0, self.omega_min
         else:
-            return super().calculate_control_inputs(rover_pose, nu, omega, dt, goal_pose, obstacles)
+            return super().calculate_control_inputs(rover_pose, v, w, dt, goal_pose, obstacles)
+
+
+class ArcPathController(Controller):
+    def __init__(
+        self,
+        v_range: List[float] = [0.0, 2.0],
+        w_range: List[float] = [-2 * np.pi, 2 * np.pi],
+        dv: float = 0.5,
+        branch_num: int = 11,
+        branch_depth: int = 5,
+        to_goal_cost_gain: float = 0.15,
+        speed_gain: float = 1.0,
+        obs_cost_gain: float = 1.0,
+        rover_r: float = 0.0,
+        rover_stuck_flag_cons: float = 0.001,
+    ) -> None:
+        self.v_min = v_range[0]
+        self.v_max = v_range[1]
+        self.w_min = w_range[0]
+        self.w_max = w_range[1]
+        self.dv = dv
+
+        self.branch_num = branch_num
+        self.branch_depth = branch_depth
+
+        self.to_goal_cost_gain = to_goal_cost_gain
+        self.speed_gain = speed_gain
+        self.obs_cost_gain = obs_cost_gain
+
+        self.rover_stuck_flag_cons = rover_stuck_flag_cons
+
+        self.rover_r = rover_r
+
+    def calculate_control_inputs(
+        self,
+        rover_pose: np.ndarray,
+        dt: float,
+        goal_pose: np.ndarray,
+        obstacles: List[Obstacle],
+        *args, **kwargs
+    ):
+        min_cost = float("inf")
+        best_u = [0.0, 0.0]
+
+        self.obstacles = obstacles
+        if len(self.obstacles) == 0:
+            obstacles_kdTree = None
+        else:
+            obstacles_kdTree = cKDTree([obstacle.pos[0:2] for obstacle in obstacles])
+
+        # List up Trajectroy
+        traj_list = []
+        for v in np.arange(self.v_min, self.v_max + 1e-4, self.dv):
+            for w in np.linspace(self.w_min, self.w_max, self.branch_num):
+                is_collision = False
+                if v < self.rover_stuck_flag_cons and w < self.rover_stuck_flag_cons:
+                    continue
+                x = np.append(rover_pose, [v, w])
+                x = np.array(x)
+                traj = np.array(x)
+                for _ in range(self.branch_depth):
+                    pose = state_transition(x[0:3], [v, w], dt)
+                    x = np.append(pose, [v, w])
+
+                    # Collision Check
+                    if obstacles_kdTree is not None:
+                        idxes = obstacles_kdTree.query_ball_point(x[0:2], 3.0)
+                        for idx in idxes:
+                            obs_pos = self.obstacles[idx].pos
+                            obs_r = self.obstacles[idx].r
+                            dist = np.linalg.norm(obs_pos - x[0:2])
+                            if dist < obs_r + self.rover_r:
+                                is_collision = True
+                                break
+                    traj = np.vstack((traj, x))
+                    if is_collision is True:
+                        break
+                traj_list.append(traj) if is_collision is False else None
+
+        # print("=" * 100)
+        for trajectory in traj_list:
+            # to_goal_cost = self.to_goal_cost_gain * self.calc_to_goal_cost(trajectory, goal_pose)
+            # speed_cost = self.speed_gain * (self.v_max - trajectory[-1, 3])
+            # ob_cost = self.obs_cost_gain * self.calc_obstacle_cost(trajectory, obstacle_list)
+            to_goal_cost = self.to_goal_cost_gain * self.calc_dist_to_goal_cost(trajectory, goal_pose)
+            # final_cost = to_goal_cost + speed_cost + ob_cost
+            final_cost = to_goal_cost  # + speed_cost
+
+            # print("[{:.2f},{:.2f}]\t[{:.2f},{:.2f}]\t{}\t{:.2f}\t{:.2f}\t".format(trajectory[-1][3], trajectory[-1][4], trajectory[-1][0], trajectory[-1][1], goal_pose, to_goal_cost, final_cost))
+            # search minimum trajectory
+            if min_cost >= final_cost:
+                min_cost = final_cost
+                best_u = [trajectory[-1, 3], trajectory[-1, 4]]
+                # if abs(best_u[0]) < self.rover_stuck_flag_cons and abs(trajectory[-1, 3]) < self.rover_stuck_flag_cons:
+                # to ensure the rover do not get stuck in
+                # best v=0 m/s (in front of an obstacle) and
+                # best omega=0 rad/s (heading to the goal with
+                # angle difference of 0)
+                # best_u[1] = self.w_min
+        # print("\t", best_u, min_cost)
+        return best_u
+
+    def calc_dist_to_goal_cost(self, trajectory, goal):
+        x, y = trajectory[-1, 0], trajectory[-1, 1]
+        cost_dist = np.linalg.norm(trajectory[-1, 0:2] - goal[0:2])
+        return cost_dist
+
+    def calc_angle_to_goal_cost(self, trajectory, goal):
+        dx = goal[0] - trajectory[-1, 0]
+        dy = goal[1] - trajectory[-1, 1]
+        error_angle = math.atan2(dy, dx)
+        cost_angle = error_angle - trajectory[-1, 2]
+        cost = abs(math.atan2(math.sin(cost_angle), math.cos(cost_angle)))
+        return cost
+
+    def calc_obstacle_cost(self, trajectory, ob):
+        if len(ob) == 0:
+            return 0.0
+        ox = ob[:, 0]
+        oy = ob[:, 1]
+        dx = trajectory[:, 0] - ox[:, None]
+        dy = trajectory[:, 1] - oy[:, None]
+        r = np.hypot(dx, dy)
+
+        yaw = trajectory[:, 2]
+        rot = np.array([[np.cos(yaw), -np.sin(yaw)], [np.sin(yaw), np.cos(yaw)]])
+        rot = np.transpose(rot, [2, 0, 1])
+        local_ob = ob[:, None] - trajectory[:, 0:2]
+        local_ob = local_ob.reshape(-1, local_ob.shape[-1])
+        local_ob = np.array([local_ob @ x for x in rot])
+        local_ob = local_ob.reshape(-1, local_ob.shape[-1])
+        upper_check = local_ob[:, 0] <= self.rover_r / 2
+        right_check = local_ob[:, 1] <= self.rover_r / 2
+        bottom_check = local_ob[:, 0] >= -self.rover_r / 2
+        left_check = local_ob[:, 1] >= -self.rover_r / 2
+        if (np.logical_and(np.logical_and(upper_check, right_check), np.logical_and(bottom_check, left_check))).any():
+            return float("Inf")
+
+        min_r = np.min(r)
+        return 1.0 / min_r  # OK
