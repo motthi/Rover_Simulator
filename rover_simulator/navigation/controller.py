@@ -7,13 +7,13 @@ from rover_simulator.utils import state_transition
 
 
 class ConstantSpeedController(Controller):
-    def __init__(self, nu: float = 1.0, omega: float = np.pi / 4) -> None:
+    def __init__(self, v: float = 1.0, w: float = np.pi / 4) -> None:
         super().__init__()
-        self.cont_nu = nu
-        self.cont_omega = omega
+        self.cont_v = v
+        self.cont_w = w
 
     def calculate_control_inputs(self):
-        return self.cont_nu, self.cont_omega
+        return self.cont_v, self.cont_w
 
 
 class DWAController(Controller):
