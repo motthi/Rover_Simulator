@@ -341,10 +341,21 @@ class RoverAnimation():
 
         # Sensing, Mapping and Path Planning
         sensed_obstacles = self.rover.history.sensing_results[start_step + i]
-        self.rover.mapper.update(self.rover.history.estimated_poses[start_step + i], sensed_obstacles)
-        if self.rover.path_planner is not None and not self.rover.mapper.isOutOfBounds(self.rover.mapper.poseToIndex(self.rover.history.estimated_poses[start_step + i])):
-            self.waypoints = self.rover.path_planner.update_path(self.rover.history.estimated_poses[start_step + i], self.rover.mapper)
-        cost_adj = 5
+        if sensed_obstacles is not None:
+            self.rover.mapper.update(self.rover.history.estimated_poses[start_step + i], sensed_obstacles)
+            if self.rover.path_planner is not None and not self.rover.mapper.isOutOfBounds(self.rover.mapper.poseToIndex(self.rover.history.estimated_poses[start_step + i])):
+                self.waypoints = self.rover.path_planner.update_path(self.rover.history.estimated_poses[start_step + i], self.rover.mapper)
+            sensing_range = patches.Wedge(
+                (x, y), self.rover.sensor.range,
+                theta1=np.rad2deg(theta - self.rover.sensor.fov / 2),
+                theta2=np.rad2deg(theta + self.rover.sensor.fov / 2),
+                alpha=0.5,
+                color="mistyrose"
+            )
+            elems.append(ax.add_patch(sensing_range))
+
+            map_range = patches.Circle(xy=(x, y), radius=self.rover.mapper.retain_range, ec='blue', fill=False)
+            elems.append(ax.add_patch(map_range))
 
         if map_name == 'table':
             for obstacle in self.rover.mapper.obstacles_table:
@@ -354,9 +365,11 @@ class RoverAnimation():
             for obstacle in self.rover.mapper.obstacles_table:
                 obs = patches.Circle(xy=(obstacle.pos[0], obstacle.pos[1]), radius=obstacle.r, fc='black', ec='black')
                 elems.append(ax.add_patch(obs))
+
         else:
             for idx, _ in np.ndenumerate(self.rover.mapper.map):
                 if map_name == 'cost':
+                    cost_adj = 5
                     if not self.rover.path_planner.g(idx) < 100000:  # LOWER状態のセルを描画
                         continue
                     c_num = int(self.rover.path_planner.g(idx))  # Black→Blue
@@ -390,7 +403,6 @@ class RoverAnimation():
                     alpha = 1.0
                     occupancy = self.rover.mapper.map[idx[0]][idx[1]]
                     c = occupancyToColor(occupancy)
-
             drawGrid(np.array(idx), self.rover.mapper.grid_width, c, alpha, ax, elems, fill)
 
         # Draw rover real pose history
