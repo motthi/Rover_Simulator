@@ -39,6 +39,7 @@ class World():
         dist_to_goal = float('inf')
         rover = self.rovers[rover_idx]
         rover_poses = [rover.estimated_pose]
+        stuck_flag = False
         while dist_to_goal >= goal_range:
             rover.one_step(self.time_interval)
             self.step += 1
@@ -49,11 +50,14 @@ class World():
                 for i in range(50):
                     traversed_dist += np.linalg.norm(rover_poses[i - 51][0:2] - rover_poses[i - 50][0:2])
                 if traversed_dist < 3.0:
+                    stuck_flag = True
                     break
         if dist_to_goal < goal_range:
             return "Succeed"
+        elif stuck_flag:
+            return "Stucked"
         else:
-            return "Failed"
+            return "Collided"
 
     def one_step(self):
         for rover in self.rovers:
