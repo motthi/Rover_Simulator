@@ -14,7 +14,7 @@ from rover_simulator.collision_detector import IgnoreCollision
 from rover_simulator.navigation.path_planner import PathPlanner
 from rover_simulator.navigation.mapper import drawGrid
 from rover_simulator.navigation.controller import DWAController
-from rover_simulator.navigation.senseing_planner import SimpleSensingPlanner
+from rover_simulator.navigation.sensing_planner import SimpleSensingPlanner
 
 if 'google.colab' in sys.modules:
     from tqdm.notebook import tqdm  # Google Colaboratory
