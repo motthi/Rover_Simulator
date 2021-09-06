@@ -78,7 +78,7 @@ class BasicRover(Rover):
         sensed_obstacles = self.sensor.sense(self) if self.sensor is not None else []
 
         # Mapping
-        self.mapper.update(self.estimated_pose, self.r, sensed_obstacles) if self.mapper is not None else None
+        self.mapper.update(self.estimated_pose, sensed_obstacles) if self.mapper is not None else None
 
         # Calculate Control Inputs
         control_inputs = self.controller.calculate_control_inputs()
@@ -235,7 +235,7 @@ class OnlinePathPlanningRover(DWARover):
 
         # Mapping
         if sense_plan_flag:
-            self.mapper.update(self.estimated_pose, self.r, sensed_obstacles) if self.mapper is not None else None
+            self.mapper.update(self.estimated_pose, sensed_obstacles) if self.mapper is not None else None
 
         # Path Planning
         if not self.mapper.isOutOfBounds(self.mapper.poseToIndex(self.estimated_pose)):
@@ -339,50 +339,61 @@ class RoverAnimation():
         xn = x + self.rover.r * np.cos(theta)
         yn = y + self.rover.r * np.sin(theta)
 
+        # Sensing, Mapping and Path Planning
         sensed_obstacles = self.rover.history.sensing_results[start_step + i]
-        self.rover.mapper.update(self.rover.history.estimated_poses[start_step + i], self.rover.r, sensed_obstacles)
+        self.rover.mapper.update(self.rover.history.estimated_poses[start_step + i], sensed_obstacles)
         if self.rover.path_planner is not None and not self.rover.mapper.isOutOfBounds(self.rover.mapper.poseToIndex(self.rover.history.estimated_poses[start_step + i])):
             self.waypoints = self.rover.path_planner.update_path(self.rover.history.estimated_poses[start_step + i], self.rover.mapper)
         cost_adj = 5
 
-        for idx, _ in np.ndenumerate(self.rover.mapper.map):
-            if map_name == 'cost':
-                if not self.rover.path_planner.g(idx) < 100000:  # LOWER状態のセルを描画
-                    continue
-                c_num = int(self.rover.path_planner.g(idx))  # Black→Blue
-                c_num = int(c_num * cost_adj)
-                if c_num > 0xff:  # Blue → Cyan
-                    c_num = (c_num - 0xff) * 16 * 16 + 0xff
-                    if c_num > 0xffff:  # Cyan → Green
-                        c_num = 0xffff - int((c_num - 0x100ff) * 4 / 256)
-                        if c_num < 0xff00:  # Green →Yellow
-                            c_num = (0xff00 - c_num) * 65536 + 0xff00
-                            if c_num > 0xffff00:  # Yellow → Red
-                                c_num = 0xffff00 - int((c_num - 0xffff00) * 0.5 / 65536) * 256
-                fill = True
-                alpha = 0.5
-                c = '#' + format(int(c_num), 'x').zfill(6)
-            elif map_name == 'metric':
-                fill = True
-                alpha = 1.0
-                occupancy = self.rover.path_planner.metric_map(idx)
-                if occupancy < 0:
-                    c = "gray"
-                else:
+        if map_name == 'table':
+            for obstacle in self.rover.mapper.obstacles_table:
+                enl_obs = patches.Circle(xy=(obstacle.pos[0], obstacle.pos[1]), radius=obstacle.r + self.rover.r, fc='gray', ec='gray')
+                elems.append(ax.add_patch(enl_obs))
+
+            for obstacle in self.rover.mapper.obstacles_table:
+                obs = patches.Circle(xy=(obstacle.pos[0], obstacle.pos[1]), radius=obstacle.r, fc='black', ec='black')
+                elems.append(ax.add_patch(obs))
+        else:
+            for idx, _ in np.ndenumerate(self.rover.mapper.map):
+                if map_name == 'cost':
+                    if not self.rover.path_planner.g(idx) < 100000:  # LOWER状態のセルを描画
+                        continue
+                    c_num = int(self.rover.path_planner.g(idx))  # Black→Blue
+                    c_num = int(c_num * cost_adj)
+                    if c_num > 0xff:  # Blue → Cyan
+                        c_num = (c_num - 0xff) * 16 * 16 + 0xff
+                        if c_num > 0xffff:  # Cyan → Green
+                            c_num = 0xffff - int((c_num - 0x100ff) * 4 / 256)
+                            if c_num < 0xff00:  # Green →Yellow
+                                c_num = (0xff00 - c_num) * 65536 + 0xff00
+                                if c_num > 0xffff00:  # Yellow → Red
+                                    c_num = 0xffff00 - int((c_num - 0xffff00) * 0.5 / 65536) * 256
+                    fill = True
+                    alpha = 0.5
+                    c = '#' + format(int(c_num), 'x').zfill(6)
+                elif map_name == 'metric':
+                    fill = True
+                    alpha = 1.0
+                    occupancy = self.rover.path_planner.metric_map(idx)
+                    if occupancy < 0:
+                        c = "gray"
+                    else:
+                        c = occupancyToColor(occupancy)
+                elif map_name == 'local':
+                    fill = True
+                    alpha = 1.0
+                    occupancy = self.rover.path_planner.local_map(idx)
                     c = occupancyToColor(occupancy)
-            elif map_name == 'local':
-                fill = True
-                alpha = 1.0
-                occupancy = self.rover.path_planner.local_map(idx)
-                c = occupancyToColor(occupancy)
-            elif map_name == 'map':
-                fill = True
-                alpha = 1.0
-                occupancy = self.rover.mapper.map[idx[0]][idx[1]]
-                c = occupancyToColor(occupancy)
+                elif map_name == 'map':
+                    fill = True
+                    alpha = 1.0
+                    occupancy = self.rover.mapper.map[idx[0]][idx[1]]
+                    c = occupancyToColor(occupancy)
 
             drawGrid(np.array(idx), self.rover.mapper.grid_width, c, alpha, ax, elems, fill)
 
+        # Draw rover real pose history
         elems += ax.plot([x, xn], [y, yn], color=self.rover.color)
         elems += ax.plot(
             [e[0] for e in self.rover.history.real_poses[start_step:start_step + i + 1]],
@@ -390,6 +401,8 @@ class RoverAnimation():
             linewidth=1.0,
             color=self.rover.color
         )
+
+        # Draw rover
         c = patches.Circle(xy=(x, y), radius=self.rover.r, fill=False, color=self.rover.color)
         elems.append(ax.add_patch(c))
 
