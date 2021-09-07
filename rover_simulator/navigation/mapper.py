@@ -62,38 +62,35 @@ class GridMapper(Mapper):
             distance = sensed_obstacle['distance']
             angle = sensed_obstacle['angle'] + rover_estimated_pose[2]
             radius = sensed_obstacle['radius']
-            obstacle_pose = rover_estimated_pose[0:2] + np.array([distance * np.cos(angle), distance * np.sin(angle)])
-            obstacle_idx = self.poseToIndex(obstacle_pose)
-            new_obstacles.append([obstacle_idx, radius])
+            obstacle_pos = rover_estimated_pose[0:2] + np.array([distance * np.cos(angle), distance * np.sin(angle)])
+            new_obstacles.append([obstacle_pos, radius])
 
         # List up deleted obstacles in sensing range
         deleted_obstacles = []
         if self.obstacle_kdTree is not None:
-            indices = self.obstacle_kdTree.query_ball_point(rover_estimated_pose[0:2], r=self.sensor.range)
-            for idx in indices:
-                radius = self.obstacles_table[idx].r
+            idxes = self.obstacle_kdTree.query_ball_point(rover_estimated_pose[0:2], r=self.sensor.range)
+            for idx in idxes:
                 obstacle_pos = self.obstacles_table[idx].pos
-                obstacle_idx = self.poseToIndex(obstacle_pos)
                 angle = np.arctan2(
                     obstacle_pos[1] - rover_estimated_pose[1],
                     obstacle_pos[0] - rover_estimated_pose[0]
                 ) - rover_estimated_pose[2]
                 if isInRange(angle, -self.sensor.fov / 2, self.sensor.fov / 2):
-                    # センシング範囲内の過去の障害物を一旦削除する
-                    deleted_obstacles.append(idx)
+                    deleted_obstacles.append(idx)   # センシング範囲内の過去の障害物を一旦削除する
 
         # Delete obstacle list from obstacle_table
-        for i in sorted(deleted_obstacles, reverse=True):
-            obstacle_idx = self.poseToIndex(self.obstacles_table[i].pos)
-            radius = self.obstacles_table[i].r
+        for idx in sorted(deleted_obstacles, reverse=True):
+            obstacle_idx = self.poseToIndex(self.obstacles_table[idx].pos)
+            radius = self.obstacles_table[idx].r
             _ = self.update_circle(obstacle_idx, radius + self.rover_r, 0.01)
-            self.obstacles_table.pop(i)
+            self.obstacles_table.pop(idx)
 
         # List up all obstacles
         updated_grids = []
-        for idx, radius in new_obstacles:
+        for pos, radius in new_obstacles:
+            idx = self.poseToIndex(pos)
             updated_grids += self.update_circle(idx, radius + self.rover_r, 0.99)
-            self.obstacles_table.append(Obstacle(self.indexToPose(idx), radius))
+            self.obstacles_table.append(Obstacle(pos, radius))
 
         # List up observed grids
         self.observed_grids = []

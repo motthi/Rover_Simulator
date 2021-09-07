@@ -354,8 +354,9 @@ class RoverAnimation():
             )
             elems.append(ax.add_patch(sensing_range))
 
-            map_range = patches.Circle(xy=(x, y), radius=self.rover.mapper.retain_range, ec='blue', fill=False)
-            elems.append(ax.add_patch(map_range))
+            if self.rover.mapper.retain_range is not None:
+                map_range = patches.Circle(xy=(x, y), radius=self.rover.mapper.retain_range, ec='blue', fill=False)
+                elems.append(ax.add_patch(map_range))
 
         if map_name == 'table':
             for obstacle in self.rover.mapper.obstacles_table:
@@ -365,7 +366,6 @@ class RoverAnimation():
             for obstacle in self.rover.mapper.obstacles_table:
                 obs = patches.Circle(xy=(obstacle.pos[0], obstacle.pos[1]), radius=obstacle.r, fc='black', ec='black')
                 elems.append(ax.add_patch(obs))
-
         else:
             for idx, _ in np.ndenumerate(self.rover.mapper.map):
                 if map_name == 'cost':
