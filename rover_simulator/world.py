@@ -41,6 +41,8 @@ class World():
         rover_poses = [rover.estimated_pose]
         stuck_flag = False
         while dist_to_goal >= goal_range:
+            if rover.collision_detector.detect_collision(rover):
+                return "Collide"
             rover.one_step(self.time_interval)
             self.step += 1
             dist_to_goal = np.linalg.norm(rover.estimated_pose[0:2] - goal_pos[0:2])
@@ -275,25 +277,26 @@ class World():
 
             # Draw History of sensing_result
             sensed_obstacles = rover.history.sensing_results[start_step + i]
-            for sensed_obstacle in sensed_obstacles:
-                x, y, theta = rover.history.estimated_poses[start_step + i]
+            if not sensed_obstacles is None:
+                for sensed_obstacle in sensed_obstacles:
+                    x, y, theta = rover.history.estimated_poses[start_step + i]
 
-                distance = sensed_obstacle['distance']
-                angle = sensed_obstacle['angle'] + theta
-                radius = sensed_obstacle['radius']
+                    distance = sensed_obstacle['distance']
+                    angle = sensed_obstacle['angle'] + theta
+                    radius = sensed_obstacle['radius']
 
-                # ロボットと障害物を結ぶ線を描写
-                xn, yn = np.array([x, y]) + np.array([distance * np.cos(angle), distance * np.sin(angle)])
-                elems += ax.plot([x, xn], [y, yn], color="mistyrose", linewidth=0.8)
+                    # ロボットと障害物を結ぶ線を描写
+                    xn, yn = np.array([x, y]) + np.array([distance * np.cos(angle), distance * np.sin(angle)])
+                    elems += ax.plot([x, xn], [y, yn], color="mistyrose", linewidth=0.8)
 
-                # Draw Enlarged Obstacle Regions
-                enl_obs = patches.Circle(xy=(xn, yn), radius=radius + rover.r, fc='blue', ec='blue', alpha=0.3)
-                elems.append(ax.add_patch(enl_obs))
+                    # Draw Enlarged Obstacle Regions
+                    enl_obs = patches.Circle(xy=(xn, yn), radius=radius + rover.r, fc='blue', ec='blue', alpha=0.3)
+                    elems.append(ax.add_patch(enl_obs))
 
-                # Draw Obstacles
-                # for obstacle in self.obstacles:
-                #     obs = patches.Circle(xy=(xn, yn), radius=obstacle.r, fc='blue', ec='blue', alpha=0.5)
-                #     elems.append(ax.add_patch(obs))
+                    # Draw Obstacles
+                    # for obstacle in self.obstacles:
+                    #     obs = patches.Circle(xy=(xn, yn), radius=obstacle.r, fc='blue', ec='blue', alpha=0.5)
+                    #     elems.append(ax.add_patch(obs))
 
             # Draw History of waypoints
             if len(rover.history.waypoints) != 0:
