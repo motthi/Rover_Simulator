@@ -29,6 +29,7 @@ class GridMapper(Mapper):
         self.obstacles_table = []
         self.obstacle_kdTree = None
         self.observed_grids = []
+        self.retain_range = float('inf')
 
         for obstacle in know_obstacles:
             obstacle_idx = self.poseToIndex(obstacle.pos)

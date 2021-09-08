@@ -403,7 +403,7 @@ class RoverAnimation():
                     alpha = 1.0
                     occupancy = self.rover.mapper.map[idx[0]][idx[1]]
                     c = occupancyToColor(occupancy)
-            drawGrid(np.array(idx), self.rover.mapper.grid_width, c, alpha, ax, elems, fill)
+                drawGrid(np.array(idx), self.rover.mapper.grid_width, c, alpha, ax, elems, fill)
 
         # Draw rover real pose history
         elems += ax.plot([x, xn], [y, yn], color=self.rover.color)
