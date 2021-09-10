@@ -362,6 +362,8 @@ class DstarLite(GridBasePathPlanning):
                 self.metric_grid_map[u[0]][u[1]] = 1.0
             else:
                 self.metric_grid_map[u[0]][u[1]] = 0.0
+        self.local_grid_map[self.current_idx[0]][self.current_idx[1]] = 0.0
+        self.metric_grid_map[self.current_idx[0]][self.current_idx[1]] = 0.0
 
         for vertex in update_to_free_list:
             u, v = vertex[0], vertex[1]
@@ -407,7 +409,6 @@ class DstarLite(GridBasePathPlanning):
                 break
             self.pathToTake.append(idx)
         self.pathToTake.append(self.goal_idx)
-        # self.pathToTake.reverse()
         waypoints = []
         for grid in self.pathToTake:
             waypoints.append(self.indexToPose(grid)[0:2])
