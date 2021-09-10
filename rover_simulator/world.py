@@ -35,7 +35,7 @@ class World():
             現状，最後のone_stepは保存されない
             """
 
-    def simulate_rover_to_goal(self, rover_idx: int, goal_pos: np.ndarray, goal_range: float = 2.0):
+    def simulate_rover_to_goal(self, rover_idx: int, goal_pos: np.ndarray, goal_range: float = 2.0, stuck_step: int = 50):
         dist_to_goal = float('inf')
         rover = self.rovers[rover_idx]
         rover_poses = [rover.estimated_pose]
@@ -47,10 +47,10 @@ class World():
             self.step += 1
             dist_to_goal = np.linalg.norm(rover.estimated_pose[0:2] - goal_pos[0:2])
             rover_poses.append(rover.estimated_pose)
-            if len(rover_poses) > 50:
+            if len(rover_poses) > stuck_step:
                 traversed_dist = 0.0
-                for i in range(50):
-                    traversed_dist += np.linalg.norm(rover_poses[i - 51][0:2] - rover_poses[i - 50][0:2])
+                for i in range(stuck_step):
+                    traversed_dist += np.linalg.norm(rover_poses[i - stuck_step - 1][0:2] - rover_poses[i - stuck_step][0:2])
                 if traversed_dist < 3.0:
                     stuck_flag = True
                     break
