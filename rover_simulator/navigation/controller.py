@@ -175,7 +175,8 @@ class PathFollower(DWAController):
         rover_pose: np.ndarray,
         v: float, w: float, dt: float,
         goal_pose: np.ndarray,
-        obstacles: List[Obstacle]
+        obstacles: List[Obstacle],
+        *args, **kwargs
     ):
         angle_to_goal = np.arctan2(goal_pose[1] - rover_pose[1], goal_pose[0] - rover_pose[0]) - rover_pose[2]
         while angle_to_goal > np.pi:
