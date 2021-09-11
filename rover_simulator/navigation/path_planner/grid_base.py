@@ -1,8 +1,12 @@
 import math
-import numpy as np
 import copy
-from rover_simulator.core import Mapper
+import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib.patches as patches
+from typing import List, Tuple
+from rover_simulator.core import Mapper, Obstacle
 from rover_simulator.navigation.path_planner import PathPlanner, PathNotFoundError
+from rover_simulator.utils import drawGrid, occupancyToColor, round_off
 
 
 neigbor_grids = np.array([[1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1], [0, -1], [1, -1]])
@@ -22,7 +26,7 @@ class GridBasePathPlanning(PathPlanner):
         return np.append(idx * self.grid_width, 0.0)
 
     def poseToIndex(self, pose: np.ndarray) -> np.ndarray:
-        return (np.array(pose[0:2]) // self.grid_width + np.array([self.grid_width, self.grid_width]) / 2).astype(np.int32)
+        return round_off(np.array(pose[0:2]) / self.grid_width).astype('int32')
 
     def neigborGrids(self, idx):
         neigbors = []
@@ -425,6 +429,71 @@ class DstarLite(GridBasePathPlanning):
 
     def local_map(self, s):
         return self.local_grid_map[s[0]][s[1]]
+
+    def draw_map(
+        self,
+        xlim: List[float], ylim: List[float],
+        figsize: Tuple[float, float] = (8, 8),
+        map_name: str = 'cost',
+        obstacles: List[Obstacle] = None,
+        enlarge_obstacle: float = 0.0,
+    ):
+        self.fig = plt.figure(figsize=figsize)
+        ax = self.fig.add_subplot(111)
+        ax.set_aspect('equal')
+        ax.set_xlim(xlim[0], xlim[1])
+        ax.set_ylim(ylim[0], ylim[1])
+        ax.set_xlabel("X [m]", fontsize=10)
+        ax.set_ylabel("Y [m]", fontsize=10)
+
+        if map_name == 'cost':
+            draw_map = self.g_map
+        elif map_name == 'metric':
+            draw_map = self.metric_grid_map
+        elif map_name == 'local':
+            draw_map = self.local_grid_map
+
+        # Draw Obstacles
+        for obstacle in obstacles:
+            enl_obs = patches.Circle(xy=(obstacle.pos[0], obstacle.pos[1]), radius=obstacle.r + enlarge_obstacle, fc='gray', ec='gray')
+            ax.add_patch(enl_obs)
+        for obstacle in obstacles:
+            obs = patches.Circle(xy=(obstacle.pos[0], obstacle.pos[1]), radius=obstacle.r, fc='black', ec='black')
+            ax.add_patch(obs)
+
+        # Draw Map
+        for idx, grid_num in np.ndenumerate(draw_map):
+            if map_name == 'cost':
+                cost_adj = 5
+                if not grid_num < 100000:  # LOWER状態のセルを描画
+                    continue
+                c_num = int(grid_num)  # Black→Blue
+                c_num = int(c_num * cost_adj)
+                if c_num > 0xff:  # Blue → Cyan
+                    c_num = (c_num - 0xff) * 16 * 16 + 0xff
+                    if c_num > 0xffff:  # Cyan → Green
+                        c_num = 0xffff - int((c_num - 0x100ff) * 4 / 256)
+                        if c_num < 0xff00:  # Green →Yellow
+                            c_num = (0xff00 - c_num) * 65536 + 0xff00
+                            if c_num > 0xffff00:  # Yellow → Red
+                                c_num = 0xffff00 - int((c_num - 0xffff00) * 0.5 / 65536) * 256
+                fill = True
+                alpha = 0.5
+                c = '#' + format(int(c_num), 'x').zfill(6)
+            elif map_name == 'metric':
+                fill = True
+                alpha = 0.5
+                if grid_num < 0:
+                    c = "gray"
+                else:
+                    c = occupancyToColor(grid_num)
+            elif map_name == 'local':
+                fill = True
+                alpha = 0.5
+                c = occupancyToColor(grid_num)
+            drawGrid(np.array(idx), self.grid_width, c, alpha, ax, None, fill)
+        # drawGrid(np.array([30, 20]), self.grid_width, "red", 1.0, ax)
+        # plt.show()
 
     def __computeShortestPath(self, index):
         U_row = [row[1] for row in self.U]

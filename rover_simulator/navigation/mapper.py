@@ -4,7 +4,7 @@ import matplotlib.patches as patches
 from typing import Dict, List
 from scipy.spatial import cKDTree
 from rover_simulator.core import Mapper, Sensor, Obstacle
-from rover_simulator.utils import isInRange, drawGrid, occupancyToColor, isInList
+from rover_simulator.utils import isInRange, drawGrid, occupancyToColor, isInList, round_off
 
 
 class GridMapper(Mapper):
@@ -75,7 +75,7 @@ class GridMapper(Mapper):
                 angle = np.arctan2(
                     obstacle_pos[1] - rover_estimated_pose[1],
                     obstacle_pos[0] - rover_estimated_pose[0]
-                ) - rover_estimated_pose[2]
+                )
                 if isInRange(angle, -self.sensor.fov / 2, self.sensor.fov / 2):
                     deleted_obstacles.append(idx)   # センシング範囲内の過去の障害物を一旦削除する
 
@@ -89,8 +89,7 @@ class GridMapper(Mapper):
         # List up all obstacles
         updated_grids = []
         for pos, radius in new_obstacles:
-            idx = self.poseToIndex(pos)
-            updated_grids += self.update_circle(idx, radius + self.rover_r, 0.99)
+            updated_grids += self.update_circle(pos, radius + self.rover_r, 0.99)
             self.obstacles_table.append(Obstacle(pos, radius))
 
         # List up observed grids
@@ -110,13 +109,17 @@ class GridMapper(Mapper):
         else:
             self.obstacle_kdTree = None
 
-    def update_circle(self, idx, r, occupancy):
+    def update_circle(self, pos, r, occupancy):
         updated_grids = []
-        for i in range(np.ceil(-r / self.grid_width).astype(np.int32), np.floor(r / self.grid_width).astype(np.int32) + 1):
-            for j in range(np.ceil(-r / self.grid_width).astype(np.int32), np.floor(r / self.grid_width).astype(np.int32) + 1):
-                if np.sqrt(i**2 + j**2) > r / self.grid_width + 1e-5:
+        range_minus = -np.arange(self.grid_width, r + 1e-5, self.grid_width)
+        range_plus = np.arange(0, r + 1e-5, self.grid_width)
+        lattice_range = np.append(range_minus, range_plus)
+        for lattice_x in lattice_range:
+            for lattice_y in lattice_range:
+                if np.linalg.norm(np.array([lattice_x, lattice_y])) > r:
                     continue
-                u = idx + np.array([i, j])
+                lattice_pos = np.array([lattice_x, lattice_y]) + pos
+                u = self.poseToIndex(lattice_pos)
                 if self.isOutOfBounds(u):
                     continue
                 self.map[u[0]][u[1]] = occupancy
@@ -124,7 +127,7 @@ class GridMapper(Mapper):
         return updated_grids
 
     def poseToIndex(self, pose: np.ndarray) -> np.ndarray:
-        return (np.array(pose[0: 2]) // self.grid_width + np.array([self.grid_width, self.grid_width]) / 2).astype(np.int32)
+        return round_off(np.array(pose[0:2]) / self.grid_width).astype('int32')
 
     def indexToPose(self, idx):
         return np.append(idx * self.grid_width, 0.0)
@@ -135,7 +138,14 @@ class GridMapper(Mapper):
         else:
             return False
 
-    def drawMap(self, xlim: List[float], ylim: List[float], figsize=(8, 8)) -> None:
+    def draw_map(
+        self,
+        xlim: List[float], ylim: List[float],
+        figsize=(8, 8),
+        obstacles: List[Obstacle] = [],
+        enlarge_obstacle: float = 0.0,
+        map_name='map'
+    ) -> None:
         self.fig = plt.figure(figsize=figsize)
         ax = self.fig.add_subplot(111)
         ax.set_aspect('equal')
@@ -144,11 +154,30 @@ class GridMapper(Mapper):
         ax.set_xlabel("X [m]", fontsize=10)
         ax.set_ylabel("Y [m]", fontsize=10)
 
-        for idx, occ in np.ndenumerate(self.map):
-            if not occ == 0.0:
-                drawGrid(np.array(idx), self.grid_width, occupancyToColor(occ), 1.0, ax)
-        # drawGrid(np.array([30, 20]), self.grid_width, "red", 1.0, ax)
-        # plt.show()
+        if map_name == 'map':
+            # Draw Obstacles
+            for obstacle in obstacles:
+                enl_obs = patches.Circle(xy=(obstacle.pos[0], obstacle.pos[1]), radius=obstacle.r + enlarge_obstacle, fc='gray', ec='gray')
+                ax.add_patch(enl_obs)
+            for obstacle in obstacles:
+                obs = patches.Circle(xy=(obstacle.pos[0], obstacle.pos[1]), radius=obstacle.r, fc='black', ec='black')
+                ax.add_patch(obs)
+            for idx, occ in np.ndenumerate(self.map):
+                if not occ == 0.0:
+                    drawGrid(np.array(idx), self.grid_width, occupancyToColor(occ), 0.5, ax)
+        elif map_name == 'table':
+            for obstacle in obstacles:
+                enl_obs = patches.Circle(xy=(obstacle.pos[0], obstacle.pos[1]), radius=obstacle.r + enlarge_obstacle, fc='gray', ec='gray', alpha=0.3)
+                ax.add_patch(enl_obs)
+            for obstacle in obstacles:
+                obs = patches.Circle(xy=(obstacle.pos[0], obstacle.pos[1]), radius=obstacle.r, fc='black', ec='black', alpha=0.3)
+                ax.add_patch(obs)
+            for obstacle in self.obstacles_table:
+                enl_obs = patches.Circle(xy=(obstacle.pos[0], obstacle.pos[1]), radius=obstacle.r + enlarge_obstacle, fc='gray', ec='gray')
+                ax.add_patch(enl_obs)
+            for obstacle in self.obstacles_table:
+                obs = patches.Circle(xy=(obstacle.pos[0], obstacle.pos[1]), radius=obstacle.r, fc='black', ec='black')
+                ax.add_patch(obs)
 
 
 class TableMapper(Mapper):
@@ -210,7 +239,7 @@ class TableMapper(Mapper):
         else:
             self.obstacle_kdTree = None
 
-    def drawMap(self, xlim: List[float], ylim: List[float], figsize=(8, 8)) -> None:
+    def draw_map(self, xlim: List[float], ylim: List[float], figsize=(8, 8)) -> None:
         self.fig = plt.figure(figsize=figsize)
         ax = self.fig.add_subplot(111)
         ax.set_aspect('equal')
