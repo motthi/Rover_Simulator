@@ -4,6 +4,12 @@ import matplotlib.patches as patches
 from typing import List
 
 
+def round_off(x, digit=0):
+    p = 10 ** digit
+    s = np.copysign(1, x)
+    return (s * x * p * 2 + 1) // 2 / p * s
+
+
 def isInList(idx: np.ndarray, idx_list: List) -> bool:
     if len(idx_list) == 0:
         return False
