@@ -249,8 +249,8 @@ class OnlinePathPlanningRover(DWARover):
 
         # Calculate Control Inputs
         control_inputs = self.controller.calculate_control_inputs(
-            self.estimated_pose, self.v, self.w, time_interval,
-            self.waypoint, self.mapper.obstacles_table
+            rover_pose=self.estimated_pose, v=self.v, w=self.w, dt=time_interval,
+            goal_pose=self.waypoint, obstacles=self.mapper.obstacles_table
         )
 
         # Record
