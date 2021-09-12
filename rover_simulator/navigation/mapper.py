@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from typing import Dict, List
+from numpy.lib.arraysetops import isin
 from scipy.spatial import cKDTree
 from rover_simulator.core import Mapper, Sensor, Obstacle
 from rover_simulator.utils import isInRange, drawGrid, occupancyToColor, isInList, round_off
@@ -14,7 +15,8 @@ class GridMapper(Mapper):
         grid_width: float = 0.1,
         sensor: Sensor = None,
         know_obstacles=[],
-        rover_r: float = 0.0
+        rover_r: float = 0.0,
+        expand_rate: float = 1.0
     ) -> None:
         super().__init__()
         self.grid_size = grid_size
@@ -23,6 +25,7 @@ class GridMapper(Mapper):
 
         self.sensor = sensor
         self.rover_r = rover_r
+        self.expand_rate = expand_rate
 
         self.map = np.full(self.grid_num, 0.5)
 
@@ -33,7 +36,7 @@ class GridMapper(Mapper):
 
         for obstacle in know_obstacles:
             obstacle_idx = self.poseToIndex(obstacle.pos)
-            self.update_circle(obstacle_idx, obstacle.r + rover_r, 1.0)
+            self.update_circle(obstacle_idx, (obstacle.r + rover_r) * 1.05, 1.0)
 
     def reset(self) -> None:
         self.map = np.full(self.grid_num, 0.5)
@@ -75,21 +78,18 @@ class GridMapper(Mapper):
                 angle = np.arctan2(
                     obstacle_pos[1] - rover_estimated_pose[1],
                     obstacle_pos[0] - rover_estimated_pose[0]
-                )
+                ) - rover_estimated_pose[2]
                 if isInRange(angle, -self.sensor.fov / 2, self.sensor.fov / 2):
                     deleted_obstacles.append(idx)   # センシング範囲内の過去の障害物を一旦削除する
-
         # Delete obstacle list from obstacle_table
         for idx in sorted(deleted_obstacles, reverse=True):
-            obstacle_idx = self.poseToIndex(self.obstacles_table[idx].pos)
-            radius = self.obstacles_table[idx].r
-            _ = self.update_circle(obstacle_idx, radius + self.rover_r, 0.01)
+            _ = self.update_circle(self.obstacles_table[idx].pos, (self.obstacles_table[idx].r + self.rover_r) * self.expand_rate, 0.01)
             self.obstacles_table.pop(idx)
 
         # List up all obstacles
         updated_grids = []
         for pos, radius in new_obstacles:
-            updated_grids += self.update_circle(pos, radius + self.rover_r, 0.99)
+            updated_grids += self.update_circle(pos, (radius + self.rover_r) * self.expand_rate, 0.99)
             self.obstacles_table.append(Obstacle(pos, radius))
 
         # List up observed grids
@@ -122,8 +122,9 @@ class GridMapper(Mapper):
                 u = self.poseToIndex(lattice_pos)
                 if self.isOutOfBounds(u):
                     continue
-                self.map[u[0]][u[1]] = occupancy
-                updated_grids.append([u, occupancy])
+                if not isInList(u, [grids[0] for grids in updated_grids]):
+                    self.map[u[0]][u[1]] = occupancy
+                    updated_grids.append([u, occupancy])
         return updated_grids
 
     def poseToIndex(self, pose: np.ndarray) -> np.ndarray:

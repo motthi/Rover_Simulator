@@ -7,6 +7,7 @@ import matplotlib.patches as patches
 from scipy.spatial import cKDTree
 from typing import List, Tuple
 from rover_simulator.core import*
+from rover_simulator.utils import drawGrid
 
 if 'google.colab' in sys.modules:
     from tqdm.notebook import tqdm  # Google Colaboratory
@@ -310,4 +311,4 @@ class World():
                     alpha=0.5
                 )
 
-        pbar.update(1)
+        pbar.update(1) if not pbar is None else None
