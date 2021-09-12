@@ -2,6 +2,29 @@ import math
 import numpy as np
 import matplotlib.patches as patches
 from typing import List
+from matplotlib.colors import LinearSegmentedColormap
+
+
+environment_cmap = LinearSegmentedColormap(
+    "environment_map",
+    {
+        'red': [
+            (0.0, 0.0, 0.0),
+            (0.5, 1.0, 1.0),
+            (1.0, 0.0, 0.0)
+        ],
+        'green': [
+            (0.0, 0.0, 0.0),
+            (0.5, 1.0, 1.0),
+            (1.0, 0.0, 0.0)
+        ],
+        'blue': [
+            (0.0, 0.0, 1.0),
+            (0.5, 1.0, 1.0),
+            (1.0, 0.0, 0.0)
+        ]
+    }  # 0.0 -> -1.0 : Unknow, 0.5 -> 0.0 : Free, 1.0 -> 1.0 : Occupied
+)
 
 
 def round_off(x, digit=0):

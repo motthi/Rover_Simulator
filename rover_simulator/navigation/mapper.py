@@ -1,8 +1,8 @@
+import cv2
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from typing import Dict, List
-from numpy.lib.arraysetops import isin
 from scipy.spatial import cKDTree
 from rover_simulator.core import Mapper, Sensor, Obstacle
 from rover_simulator.utils import isInRange, drawGrid, occupancyToColor, isInList, round_off
@@ -35,8 +35,7 @@ class GridMapper(Mapper):
         self.retain_range = float('inf')
 
         for obstacle in know_obstacles:
-            obstacle_idx = self.poseToIndex(obstacle.pos)
-            self.update_circle(obstacle_idx, (obstacle.r + rover_r) * 1.05, 1.0)
+            self.update_circle(obstacle.pos, (obstacle.r + rover_r) * expand_rate, 1.0)
 
     def reset(self) -> None:
         self.map = np.full(self.grid_num, 0.5)
@@ -158,14 +157,24 @@ class GridMapper(Mapper):
         if map_name == 'map':
             # Draw Obstacles
             for obstacle in obstacles:
-                enl_obs = patches.Circle(xy=(obstacle.pos[0], obstacle.pos[1]), radius=obstacle.r + enlarge_obstacle, fc='gray', ec='gray')
+                enl_obs = patches.Circle(xy=(obstacle.pos[0], obstacle.pos[1]), radius=obstacle.r + enlarge_obstacle, fc='gray', ec='gray', zorder=-1.0)
                 ax.add_patch(enl_obs)
             for obstacle in obstacles:
-                obs = patches.Circle(xy=(obstacle.pos[0], obstacle.pos[1]), radius=obstacle.r, fc='black', ec='black')
+                obs = patches.Circle(xy=(obstacle.pos[0], obstacle.pos[1]), radius=obstacle.r, fc='black', ec='black', zorder=-1.0)
                 ax.add_patch(obs)
-            for idx, occ in np.ndenumerate(self.map):
-                if not occ == 0.0:
-                    drawGrid(np.array(idx), self.grid_width, occupancyToColor(occ), 0.5, ax)
+
+            im = ax.imshow(
+                cv2.rotate(self.map, cv2.ROTATE_90_COUNTERCLOCKWISE),
+                cmap="Greys",
+                alpha=0.5,
+                extent=(
+                    -self.grid_width / 2,
+                    self.grid_width * self.grid_num[0] - self.grid_width / 2,
+                    -self.grid_width / 2, self.grid_width * self.grid_num[1] - self.grid_width / 2
+                ),
+                zorder=1.0
+            )
+            plt.colorbar(im)
         elif map_name == 'table':
             for obstacle in obstacles:
                 enl_obs = patches.Circle(xy=(obstacle.pos[0], obstacle.pos[1]), radius=obstacle.r + enlarge_obstacle, fc='gray', ec='gray', alpha=0.3)

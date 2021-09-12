@@ -1,5 +1,6 @@
 
 import sys
+import cv2
 import copy
 import numpy as np
 import matplotlib.animation as anm
@@ -7,7 +8,7 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from typing import List, Tuple
 from rover_simulator.core import*
-from rover_simulator.utils import occupancyToColor, state_transition
+from rover_simulator.utils import occupancyToColor, state_transition, environment_cmap
 from rover_simulator.core import Obstacle, SensingPlanner
 from rover_simulator.world import World
 from rover_simulator.collision_detector import IgnoreCollision
@@ -363,52 +364,45 @@ class RoverAnimation():
                 elems.append(ax.add_patch(map_range))
 
         if not elems is None:
-            if map_name == 'table':
-                for obstacle in self.rover.mapper.obstacles_table:
-                    enl_obs = patches.Circle(xy=(obstacle.pos[0], obstacle.pos[1]), radius=obstacle.r + self.rover.r, fc='gray', ec='gray')
-                    elems.append(ax.add_patch(enl_obs))
+            alpha = 1.0
+            for obstacle in self.rover.mapper.obstacles_table:
+                enl_obs = patches.Circle(xy=(obstacle.pos[0], obstacle.pos[1]), radius=obstacle.r + self.rover.r, alpha=alpha, fc='gray', ec='gray', zorder=-1.0)
+                elems.append(ax.add_patch(enl_obs))
 
-                for obstacle in self.rover.mapper.obstacles_table:
-                    obs = patches.Circle(xy=(obstacle.pos[0], obstacle.pos[1]), radius=obstacle.r, fc='black', ec='black')
-                    elems.append(ax.add_patch(obs))
-            else:
-                for idx, _ in np.ndenumerate(self.rover.mapper.map):
-                    if map_name == 'cost':
-                        cost_adj = 5
-                        if not self.rover.path_planner.g(idx) < 100000:  # LOWER状態のセルを描画
-                            continue
-                        c_num = int(self.rover.path_planner.g(idx))  # Black→Blue
-                        c_num = int(c_num * cost_adj)
-                        if c_num > 0xff:  # Blue → Cyan
-                            c_num = (c_num - 0xff) * 16 * 16 + 0xff
-                            if c_num > 0xffff:  # Cyan → Green
-                                c_num = 0xffff - int((c_num - 0x100ff) * 4 / 256)
-                                if c_num < 0xff00:  # Green →Yellow
-                                    c_num = (0xff00 - c_num) * 65536 + 0xff00
-                                    if c_num > 0xffff00:  # Yellow → Red
-                                        c_num = 0xffff00 - int((c_num - 0xffff00) * 0.5 / 65536) * 256
-                        fill = True
-                        alpha = 0.5
-                        c = '#' + format(int(c_num), 'x').zfill(6)
-                    elif map_name == 'metric':
-                        fill = True
-                        alpha = 1.0
-                        occupancy = self.rover.path_planner.metric_map(idx)
-                        if occupancy < 0:
-                            c = "gray"
-                        else:
-                            c = occupancyToColor(occupancy)
-                    elif map_name == 'local':
-                        fill = True
-                        alpha = 1.0
-                        occupancy = self.rover.path_planner.local_map(idx)
-                        c = occupancyToColor(occupancy)
-                    elif map_name == 'map':
-                        fill = True
-                        alpha = 1.0
-                        occupancy = self.rover.mapper.map[idx[0]][idx[1]]
-                        c = occupancyToColor(occupancy)
-                    drawGrid(np.array(idx), self.rover.mapper.grid_width, c, alpha, ax, elems, fill)
+            for obstacle in self.rover.mapper.obstacles_table:
+                obs = patches.Circle(xy=(obstacle.pos[0], obstacle.pos[1]), radius=obstacle.r, alpha=alpha, fc='black', ec='black', zorder=-1.0)
+                elems.append(ax.add_patch(obs))
+
+            if map_name == 'cost':
+                draw_map = self.rover.path_planner.g_map
+                cmap = 'plasma'
+                vmin = None
+                vmax = None
+            elif map_name == 'metric':
+                draw_map = self.rover.path_planner.metric_grid_map
+                cmap = environment_cmap
+                vmin = -1.0
+                vmax = 1.0
+            elif map_name == 'local':
+                draw_map = self.rover.path_planner.local_grid_map
+                cmap = 'Greys'
+                vmin = 0.0
+                vmax = 1.0
+            im = ax.imshow(
+                cv2.rotate(draw_map, cv2.ROTATE_90_COUNTERCLOCKWISE),
+                cmap=cmap,
+                vmin=vmin,
+                vmax=vmax,
+                alpha=0.5,
+                extent=(
+                    -self.rover.path_planner.grid_width / 2,
+                    self.rover.path_planner.grid_width * self.rover.path_planner.grid_num[0] - self.rover.path_planner.grid_width / 2,
+                    -self.rover.path_planner.grid_width / 2, self.rover.path_planner.grid_width * self.rover.path_planner.grid_num[1] - self.rover.path_planner.grid_width / 2
+                ),
+                zorder=1.0
+            )
+            elems.append(im)
+            elems.append(plt.colorbar(im))
 
         # Draw rover real pose history
         if not elems is None:

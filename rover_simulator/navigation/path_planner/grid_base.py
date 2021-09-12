@@ -1,12 +1,13 @@
 import math
 import copy
+import cv2
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from typing import List, Tuple
 from rover_simulator.core import Mapper, Obstacle
 from rover_simulator.navigation.path_planner import PathPlanner, PathNotFoundError
-from rover_simulator.utils import drawGrid, occupancyToColor, round_off
+from rover_simulator.utils import environment_cmap, round_off
 
 
 neigbor_grids = np.array([[1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1], [0, -1], [1, -1]])
@@ -121,7 +122,8 @@ class Dijkstra(GridBasePathPlanning):
 
     def calculate_path(self, *args):
         while not self.isClosed(self.goal_idx):
-            _, _ = self.expandGrid()
+            idx, cost = self.expandGrid()
+            self.cost_map[idx[0]][idx[1]] = cost
         path = self.get_path()
         waypoints = [self.indexToPose(self.goal_idx)]
         for grid in path:
@@ -198,6 +200,58 @@ class Dijkstra(GridBasePathPlanning):
 
     def c(self, u, v):
         return np.linalg.norm(u - v)
+
+    def draw_map(
+        self,
+        xlim: List[float], ylim: List[float],
+        figsize: Tuple[float, float] = (8, 8),
+        obstacles: List[Obstacle] = None,
+        map_name: str = 'cost',
+        enlarge_obstacle: float = 0.0,
+    ):
+        self.fig = plt.figure(figsize=figsize)
+        ax = self.fig.add_subplot(111)
+        ax.set_aspect('equal')
+        ax.set_xlim(xlim[0], xlim[1])
+        ax.set_ylim(ylim[0], ylim[1])
+        ax.set_xlabel("X [m]", fontsize=10)
+        ax.set_ylabel("Y [m]", fontsize=10)
+
+        # Draw Obstacles
+        for obstacle in obstacles:
+            enl_obs = patches.Circle(xy=(obstacle.pos[0], obstacle.pos[1]), radius=obstacle.r + enlarge_obstacle, fc='gray', ec='gray', zorder=-1.0)
+            ax.add_patch(enl_obs)
+        for obstacle in obstacles:
+            obs = patches.Circle(xy=(obstacle.pos[0], obstacle.pos[1]), radius=obstacle.r, fc='black', ec='black', zorder=-1.0)
+            ax.add_patch(obs)
+
+        # Draw Map
+        if map_name == 'cost':
+            draw_map = self.cost_map
+            cmap = 'plasma'
+            vmin = None
+            vmax = None
+        elif map_name == 'grid':
+            draw_map = self.grid_map
+            cmap = 'Greys'
+            vmin = 0.0
+            vmax = 1.0
+
+        draw_map = cv2.rotate(draw_map, cv2.ROTATE_90_COUNTERCLOCKWISE)
+        im = ax.imshow(
+            draw_map,
+            cmap=cmap,
+            vmin=vmin,
+            vmax=vmax,
+            alpha=0.5,
+            extent=(
+                -self.grid_width / 2,
+                self.grid_width * self.grid_num[0] - self.grid_width / 2,
+                -self.grid_width / 2, self.grid_width * self.grid_num[1] - self.grid_width / 2
+            ),
+            zorder=1.0
+        )
+        plt.colorbar(im)
 
 
 class Astar(Dijkstra):
@@ -335,11 +389,11 @@ class DstarLite(GridBasePathPlanning):
                     update_to_obstacle_list.append([u, v])
                     update_to_obstacle_list.append([v, u])
             # Diagonal
-            # for vertex in [[[-1, 0], [0, 1]], [[0, 1], [1, 0]], [[1, 0], [0, -1]], [[0, -1], [-1, 0]]]:
-            #     w, x = u + np.array(vertex[0]), u + np.array(vertex[1])
-            #     if not self.__c(w, x) == float('inf'):
-            #         update_to_obstacle_list.append([w, x])
-            #         update_to_obstacle_list.append([x, w])
+            for vertex in [[[-1, 0], [0, 1]], [[0, 1], [1, 0]], [[1, 0], [0, -1]], [[0, -1], [-1, 0]]]:
+                w, x = u + np.array(vertex[0]), u + np.array(vertex[1])
+                if not self.__c(w, x) == float('inf'):
+                    update_to_obstacle_list.append([w, x])
+                    update_to_obstacle_list.append([x, w])
         # Obstacle -> Free
         for u in self.newFrees:
             if self.isOutOfBounds(u):
@@ -351,13 +405,13 @@ class DstarLite(GridBasePathPlanning):
                     update_to_free_list.append([u, v])
                     update_to_free_list.append([v, u])
             # Diagonal
-            # for vertex in [[[-1, 0], [0, 1]], [[0, 1], [1, 0]], [[1, 0], [0, -1]], [[0, -1], [-1, 0]]]:
-            #     w, x = u + np.array(vertex[0]), u + np.array(vertex[1])
-            #     if self.isOutOfBounds(w) or self.isOutOfBounds(x):
-            #         continue
-            #     if not self.__c(w, x) == 0.0:
-            #         update_to_free_list.append([w, x])
-            #         update_to_free_list.append([x, w])
+            for vertex in [[[-1, 0], [0, 1]], [[0, 1], [1, 0]], [[1, 0], [0, -1]], [[0, -1], [-1, 0]]]:
+                w, x = u + np.array(vertex[0]), u + np.array(vertex[1])
+                if self.isOutOfBounds(w) or self.isOutOfBounds(x):
+                    continue
+                if not self.__c(w, x) == 0.0:
+                    update_to_free_list.append([w, x])
+                    update_to_free_list.append([x, w])
 
         # コストが変わる辺をリストアップ
         updated_vertex = []
@@ -372,8 +426,6 @@ class DstarLite(GridBasePathPlanning):
                 self.metric_grid_map[u[0]][u[1]] = 1.0
             else:
                 self.metric_grid_map[u[0]][u[1]] = 0.0
-        # self.local_grid_map[self.current_idx[0]][self.current_idx[1]] = 0.0
-        # self.metric_grid_map[self.current_idx[0]][self.current_idx[1]] = 0.0
 
         for vertex in update_to_free_list:
             u, v = vertex[0], vertex[1]
@@ -472,43 +524,39 @@ class DstarLite(GridBasePathPlanning):
 
         # Draw Obstacles
         for obstacle in obstacles:
-            enl_obs = patches.Circle(xy=(obstacle.pos[0], obstacle.pos[1]), radius=obstacle.r + enlarge_obstacle, fc='gray', ec='gray')
+            enl_obs = patches.Circle(xy=(obstacle.pos[0], obstacle.pos[1]), radius=obstacle.r + enlarge_obstacle, fc='gray', ec='gray', zorder=-1.0)
             ax.add_patch(enl_obs)
         for obstacle in obstacles:
-            obs = patches.Circle(xy=(obstacle.pos[0], obstacle.pos[1]), radius=obstacle.r, fc='black', ec='black')
+            obs = patches.Circle(xy=(obstacle.pos[0], obstacle.pos[1]), radius=obstacle.r, fc='black', ec='black', zorder=-1.0)
             ax.add_patch(obs)
 
         # Draw Map
-        for idx, grid_num in np.ndenumerate(draw_map):
-            if map_name == 'cost':
-                cost_adj = 5
-                if not grid_num < 100000:  # LOWER状態のセルを描画
-                    continue
-                c_num = int(grid_num)  # Black→Blue
-                c_num = int(c_num * cost_adj)
-                if c_num > 0xff:  # Blue → Cyan
-                    c_num = (c_num - 0xff) * 16 * 16 + 0xff
-                    if c_num > 0xffff:  # Cyan → Green
-                        c_num = 0xffff - int((c_num - 0x100ff) * 4 / 256)
-                        if c_num < 0xff00:  # Green →Yellow
-                            c_num = (0xff00 - c_num) * 65536 + 0xff00
-                            if c_num > 0xffff00:  # Yellow → Red
-                                c_num = 0xffff00 - int((c_num - 0xffff00) * 0.5 / 65536) * 256
-                fill = True
-                alpha = 0.5
-                c = '#' + format(int(c_num), 'x').zfill(6)
-            elif map_name == 'metric':
-                fill = True
-                alpha = 0.5
-                if grid_num < 0:
-                    c = "gray"
-                else:
-                    c = occupancyToColor(grid_num)
-            elif map_name == 'local':
-                fill = True
-                alpha = 0.5
-                c = occupancyToColor(grid_num)
-            drawGrid(np.array(idx), self.grid_width, c, alpha, ax, None, fill)
+        if map_name == 'cost':
+            cmap = 'plasma'
+            vmin = None
+            vmax = None
+        elif map_name == 'metric':
+            cmap = environment_cmap
+            vmin = -1.0
+            vmax = 1.0
+        elif map_name == 'local':
+            cmap = 'Greys'
+            vmin = 0.0
+            vmax = 1.0
+        im = ax.imshow(
+            cv2.rotate(draw_map, cv2.ROTATE_90_COUNTERCLOCKWISE),
+            cmap=cmap,
+            vmin=vmin,
+            vmax=vmax,
+            alpha=0.5,
+            extent=(
+                -self.grid_width / 2,
+                self.grid_width * self.grid_num[0] - self.grid_width / 2,
+                -self.grid_width / 2, self.grid_width * self.grid_num[1] - self.grid_width / 2
+            ),
+            zorder=1.0
+        )
+        plt.colorbar(im)
 
     def __computeShortestPath(self, index):
         U_row = [row[1] for row in self.U]
@@ -599,18 +647,18 @@ class DstarLite(GridBasePathPlanning):
         else:
             if np.all(np.abs(u - v) == [1, 1]):
                 c_ = 1.41
-                # if np.all(v - u == [1, 1]):
-                #     if self.metric_grid_map[u[0] + 1][u[1]] == 1 or self.metric_grid_map[u[0]][u[1] + 1] == 1:
-                #         c_ = float('inf')
-                # elif np.all(v - u == [1, -1]):
-                #     if self.metric_grid_map[u[0] + 1][u[1]] == 1 or self.metric_grid_map[u[0]][u[1] - 1] == 1:
-                #         c_ = float('inf')
-                # elif np.all(v - u == [-1, 1]):
-                #     if self.metric_grid_map[u[0] - 1][u[1]] == 1 or self.metric_grid_map[u[0]][u[1] + 1] == 1:
-                #         c_ = float('inf')
-                # elif np.all(v - u == [-1, -1]):
-                #     if self.metric_grid_map[u[0] - 1][u[1]] == 1 or self.metric_grid_map[u[0]][u[1] - 1] == 1:
-                #         c_ = float('inf')
+                if np.all(v - u == [1, 1]):
+                    if self.metric_grid_map[u[0] + 1][u[1]] == 1 or self.metric_grid_map[u[0]][u[1] + 1] == 1:
+                        c_ = float('inf')
+                elif np.all(v - u == [1, -1]):
+                    if self.metric_grid_map[u[0] + 1][u[1]] == 1 or self.metric_grid_map[u[0]][u[1] - 1] == 1:
+                        c_ = float('inf')
+                elif np.all(v - u == [-1, 1]):
+                    if self.metric_grid_map[u[0] - 1][u[1]] == 1 or self.metric_grid_map[u[0]][u[1] + 1] == 1:
+                        c_ = float('inf')
+                elif np.all(v - u == [-1, -1]):
+                    if self.metric_grid_map[u[0] - 1][u[1]] == 1 or self.metric_grid_map[u[0]][u[1] - 1] == 1:
+                        c_ = float('inf')
             else:
                 c_ = 1.0
             return c_
