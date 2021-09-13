@@ -121,6 +121,10 @@ class Dijkstra(GridBasePathPlanning):
             cnt += 1
 
     def calculate_path(self, *args):
+        if self.isOutOfBounds(self.start_idx):
+            raise PathNotFoundError("Start index is out of bounds")
+        if self.isOutOfBounds(self.goal_idx):
+            raise PathNotFoundError("Goal index is out of bounds")
         while not self.isClosed(self.goal_idx):
             idx, cost = self.expandGrid()
             self.cost_map[idx[0]][idx[1]] = cost
