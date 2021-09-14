@@ -321,6 +321,11 @@ class DstarLite(GridBasePathPlanning):
         self.grid_num = np.array(mapper.map.shape)
         self.grid_map = copy.copy(mapper.map)
 
+        if self.isOutOfBounds(self.start_idx):
+            raise ValueError("Start position is out of bounds")
+        if self.isOutOfBounds(self.goal_idx):
+            raise ValueError("Goal position is out of bounds")
+
         self.local_grid_map = copy.copy(mapper.map)  # センシングによって構築したマップ
         self.local_grid_map[self.start_idx[0]][self.start_idx[1]] = 0.0
         self.metric_grid_map = np.full(self.grid_num, -1.0, dtype=np.float)  # 経路計画で使用するマップ
@@ -359,7 +364,7 @@ class DstarLite(GridBasePathPlanning):
         self.current_idx = self.start_idx
 
     def calculate_path(self):
-        self.__computeShortestPath(self.start_idx)
+        self.computeShortestPath(self.start_idx)
         waypoints = self.get_path(self.current_idx)
         return waypoints
 
@@ -454,7 +459,7 @@ class DstarLite(GridBasePathPlanning):
                         self.rhs_map[u[0]][u[1]] = self.__getMinRhs(u)
                 self.__updateVertex(u)
 
-            self.__computeShortestPath(self.current_idx)
+            self.computeShortestPath(self.current_idx)
 
         waypoints = self.get_path(self.current_idx)
         return waypoints
@@ -473,7 +478,10 @@ class DstarLite(GridBasePathPlanning):
                     last_cost = self.g(s_)
                     next_idx = s_
             idx = next_idx
-        while not self.isGoal(idx):
+        # while not self.isGoal(idx):
+        for i in range(30):
+            if self.isGoal(idx):
+                break
             next_idx = idx
             min_cost = float('inf')
             for s_ in self.neigborGrids(idx):
@@ -562,7 +570,7 @@ class DstarLite(GridBasePathPlanning):
         )
         plt.colorbar(im)
 
-    def __computeShortestPath(self, index):
+    def computeShortestPath(self, index):
         U_row = [row[1] for row in self.U]
         if len(U_row) == 0:
             return
