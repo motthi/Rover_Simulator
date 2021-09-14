@@ -3,7 +3,7 @@ import numpy as np
 from typing import Dict, List
 from scipy.spatial import cKDTree
 from rover_simulator.core import Obstacle, Sensor, Rover
-from rover_simulator.utils import isInRange
+from rover_simulator.utils import angle_to_range, isInRange
 
 
 class ImaginalSensor(Sensor):
@@ -23,10 +23,12 @@ class ImaginalSensor(Sensor):
             obstacle = self.obstacles[idx]
             obstacle_pos = obstacle.pos
             distance = np.linalg.norm(rover.estimated_pose[0:2] - obstacle_pos)
-            angle = np.arctan2(
-                obstacle_pos[1] - rover.estimated_pose[1],
-                obstacle_pos[0] - rover.estimated_pose[0]
-            ) - rover.estimated_pose[2]
+            angle = angle_to_range(
+                np.arctan2(
+                    obstacle_pos[1] - rover.estimated_pose[1],
+                    obstacle_pos[0] - rover.estimated_pose[0]
+                ) - rover.estimated_pose[2]
+            )
             if isInRange(angle, - self.fov / 2, self.fov / 2):
                 sensed_obstacles.append({'distance': distance, 'angle': angle, 'radius': obstacle.r})
         return sensed_obstacles

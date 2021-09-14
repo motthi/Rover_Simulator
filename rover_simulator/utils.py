@@ -77,18 +77,6 @@ def state_transition(pose: np.ndarray, control_inputs: np.ndarray, time: float) 
 
 
 def isInRange(angle: float, rangeMin: float, rangeMax: float):
-    while angle > np.pi:
-        angle -= 2 * np.pi
-    while angle < -np.pi:
-        angle += 2 * np.pi
-    while rangeMin > np.pi:
-        rangeMin -= 2 * np.pi
-    while rangeMin < -np.pi:
-        rangeMin += 2 * np.pi
-    while rangeMax > np.pi:
-        rangeMax -= 2 * np.pi
-    while rangeMax < -np.pi:
-        rangeMax += 2 * np.pi
     if rangeMin < rangeMax:
         if angle >= rangeMin and angle < rangeMax:
             return True
@@ -101,6 +89,14 @@ def isInRange(angle: float, rangeMin: float, rangeMax: float):
             return True
         else:
             return False
+
+
+def angle_to_range(angle):
+    while angle > np.pi:
+        angle -= 2 * np.pi
+    while angle < -np.pi:
+        angle += 2 * np.pi
+    return angle
 
 
 def lToP(l):
