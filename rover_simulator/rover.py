@@ -8,12 +8,11 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from typing import List, Tuple
 from rover_simulator.core import*
-from rover_simulator.utils import occupancyToColor, state_transition, environment_cmap
+from rover_simulator.utils import state_transition, environment_cmap
 from rover_simulator.core import Obstacle, SensingPlanner
 from rover_simulator.world import World
 from rover_simulator.collision_detector import IgnoreCollision
 from rover_simulator.navigation.path_planner import PathPlanner
-from rover_simulator.navigation.mapper import drawGrid
 from rover_simulator.navigation.controller import DWAController
 from rover_simulator.navigation.sensing_planner import SimpleSensingPlanner
 
