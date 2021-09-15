@@ -49,9 +49,10 @@ class GridMapper(Mapper):
         sensed_grids = []
         ang_range_min = angle_to_range(rover_estimated_pose[2] - self.sensor.fov / 2)
         ang_range_max = angle_to_range(rover_estimated_pose[2] + self.sensor.fov / 2)
-        for i in range(np.ceil(-self.sensor.range / self.grid_width).astype(np.int32), np.floor(self.sensor.range / self.grid_width).astype(np.int32) + 1):
-            for j in range(np.ceil(-self.sensor.range / self.grid_width).astype(np.int32), np.floor(self.sensor.range / self.grid_width).astype(np.int32) + 1):
-                if np.sqrt(i**2 + j**2) > self.sensor.range / self.grid_width + 1e-5:
+        sensing_range = self.sensor.range / self.grid_width
+        for i in range(np.ceil(-sensing_range).astype(np.int32), np.floor(sensing_range).astype(np.int32) + 1):
+            for j in range(np.ceil(-sensing_range).astype(np.int32), np.floor(sensing_range).astype(np.int32) + 1):
+                if np.sqrt(i**2 + j**2) > sensing_range + 1e-5:
                     continue
                 u = rover_idx + np.array([i, j])
                 if self.isOutOfBounds(u):

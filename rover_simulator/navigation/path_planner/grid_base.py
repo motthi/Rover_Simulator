@@ -56,11 +56,16 @@ class GridBasePathPlanning(PathPlanner):
         else:
             return False
 
-    def isOutOfBounds(self, idx):
-        if np.any(idx >= self.grid_num) or np.any(idx < [0, 0]):
+    def isOutOfBounds(self, idx: np.ndarray) -> bool:
+        if idx[0] >= self.grid_num[0]:
             return True
-        else:
-            return False
+        elif idx[0] < 0:
+            return True
+        if idx[1] >= self.grid_num[1]:
+            return True
+        elif idx[1] < 0:
+            return True
+        return False
 
     def isObstacleDiagonal(self, idx1, idx2):
         v = idx2 - idx1
@@ -90,9 +95,10 @@ class Dijkstra(GridBasePathPlanning):
         self.cost_map = np.full(self.grid_num, 0.0, dtype=float) if map is not None else None
         self.id_map = np.full(self.grid_num, 0, dtype=np.int32) if map is not None else None
         self.parent_id_map = np.full(self.grid_num, 0, dtype=np.int32) if map is not None else None
+        self.is_opened_map = np.full(np.append(np.array(map.shape), 3), 0.0) if map is not None else None
+        self.is_closed_map = np.full(np.append(np.array(map.shape), 3), 0.0) if map is not None else None
 
         self.open_list = []
-        self.closed_list = []
         self.resultPath = []
         self.takenPath = []
 
@@ -104,6 +110,9 @@ class Dijkstra(GridBasePathPlanning):
                 self.id_map[u[0]][u[1]] = cnt
                 if self.isStart(u):
                     self.open_list.append([cnt, 0, 0])
+                    self.is_opened_map[u[0]][u[1]][0] = 1.0
+                    self.is_opened_map[u[0]][u[1]][1] = 0.0
+                    self.is_opened_map[u[0]][u[1]][2] = 0.0
                 cnt += 1
 
     def set_map(self, mapper: Mapper):
@@ -113,11 +122,16 @@ class Dijkstra(GridBasePathPlanning):
         self.cost_map = np.full(self.grid_num, 0.0, dtype=float)
         self.id_map = np.full(self.grid_num, 0, dtype=np.int32)
         self.parent_id_map = np.full(self.grid_num, 0, dtype=np.int32)
+        self.is_opened_map = np.full(np.append(np.array(mapper.map.shape), 3), 0.0)
+        self.is_closed_map = np.full(np.append(np.array(mapper.map.shape), 3), 0.0)
         cnt = 0
         for u, _ in np.ndenumerate(self.cost_map):
             self.id_map[u[0]][u[1]] = cnt
             if self.isStart(u):
                 self.open_list.append([cnt, 0, 0])
+                self.is_opened_map[u[0]][u[1]][0] = 1.0
+                self.is_opened_map[u[0]][u[1]][1] = 0.0
+                self.is_opened_map[u[0]][u[1]][2] = 0.0
             cnt += 1
 
     def calculate_path(self, *args):
@@ -142,28 +156,47 @@ class Dijkstra(GridBasePathPlanning):
         val = np.argmin(self.open_list, axis=0)  # 評価マップの中から最も小さいもの抽出
         grid_id, cost_f, cost_g = self.open_list[val[1]]
         idx = np.array([np.where(self.id_map == grid_id)[0][0], np.where(self.id_map == grid_id)[1][0]])
-        self.open_list.remove([grid_id, cost_f, cost_g])  # オープンリストから削除
-        self.closed_list.append([grid_id, cost_f, cost_g])  # クローズドリストに追加
+
+        # Remove from Opened List
+        self.open_list.remove([grid_id, cost_f, cost_g])
+        self.is_opened_map[idx[0]][idx[1]][0] = 0.0
+        self.is_opened_map[idx[0]][idx[1]][1] = 0.0
+        self.is_opened_map[idx[0]][idx[1]][2] = 0.0
+
+        # Append Closed List
+        self.is_closed_map[idx[0]][idx[1]][0] = 1.0
+        self.is_closed_map[idx[0]][idx[1]][1] = cost_f
+        self.is_closed_map[idx[0]][idx[1]][2] = cost_g
         self.calculateCost(idx, cost_g)  # コストの計算
         return idx, cost_f
 
     def calculateCost(self, idx, cost_g):
-        for n in self.listFreeNeigbor(idx):
-            evaluation_f = cost_g + self.cost(n) + self.c(n, idx)
-            if self.isOpened(n):
-                its_idx, its_cost_f, its_cost_g = self.open_list[[val[0] for val in self.open_list].index(self.id(n))]
-                if its_cost_f > evaluation_f:
-                    self.open_list.remove([its_idx, its_cost_f, its_cost_g])
+        for neigbor_idx in self.listFreeNeigbor(idx):
+            evaluation_f = cost_g + self.cost(neigbor_idx) + self.c(neigbor_idx, idx)
+            if self.isOpened(neigbor_idx):
+                neigbor_cost_f = self.is_opened_map[neigbor_idx[0]][neigbor_idx[1]][1]
+                neigbor_cost_g = self.is_opened_map[neigbor_idx[0]][neigbor_idx[1]][2]
+                if neigbor_cost_f > evaluation_f:
+                    self.open_list.remove([self.id(neigbor_idx), neigbor_cost_f, neigbor_cost_g])
+                    self.is_opened_map[neigbor_idx[0]][neigbor_idx[1]][0] = 0.0
+                    self.is_opened_map[neigbor_idx[0]][neigbor_idx[1]][1] = 0.0
+                    self.is_opened_map[neigbor_idx[0]][neigbor_idx[1]][2] = 0.0
                 else:
                     continue
-            elif self.isClosed(n):
-                its_idx, its_cost_f, its_cost_g = self.closed_list[[val[0] for val in self.closed_list].index(self.id(n))]
-                if its_cost_f > evaluation_f:
-                    self.closed_list.remove([its_idx, its_cost_f, its_cost_g])
+            elif self.isClosed(neigbor_idx):
+                neigbor_cost_f = self.is_closed_map[neigbor_idx[0]][neigbor_idx[1]][1]
+                neigbor_cost_g = self.is_closed_map[neigbor_idx[0]][neigbor_idx[1]][2]
+                if neigbor_cost_f > evaluation_f:
+                    self.is_closed_map[neigbor_idx[0]][neigbor_idx[1]][0] = 0.0
+                    self.is_closed_map[neigbor_idx[0]][neigbor_idx[1]][1] = 0.0
+                    self.is_closed_map[neigbor_idx[0]][neigbor_idx[1]][2] = 0.0
                 else:
                     continue
-            self.parent_id_map[n[0]][n[1]] = self.id(idx)
-            self.open_list.append([self.id(n), evaluation_f, evaluation_f])
+            self.parent_id_map[neigbor_idx[0]][neigbor_idx[1]] = self.id(idx)
+            self.open_list.append([self.id(neigbor_idx), evaluation_f, evaluation_f])
+            self.is_opened_map[neigbor_idx[0]][neigbor_idx[1]][0] = 1.0
+            self.is_opened_map[neigbor_idx[0]][neigbor_idx[1]][1] = evaluation_f
+            self.is_opened_map[neigbor_idx[0]][neigbor_idx[1]][2] = evaluation_f
 
     def get_path(self):
         parent_id = self.b(self.goal_idx)
@@ -188,10 +221,16 @@ class Dijkstra(GridBasePathPlanning):
         return neigbor_indice
 
     def isOpened(self, u):
-        return self.id(u) in [val[0] for val in self.open_list]
+        if self.is_opened_map[u[0]][u[1]][0] == 1.0:
+            return True
+        else:
+            return False
 
     def isClosed(self, u):
-        return self.id(u) in [val[0] for val in self.closed_list]
+        if self.is_closed_map[u[0]][u[1]][0] == 1.0:
+            return True
+        else:
+            return False
 
     def id(self, u):
         return self.id_map[u[0]][u[1]]
@@ -209,7 +248,7 @@ class Dijkstra(GridBasePathPlanning):
         self,
         xlim: List[float], ylim: List[float],
         figsize: Tuple[float, float] = (8, 8),
-        obstacles: List[Obstacle] = None,
+        obstacles: List[Obstacle] = [],
         map_name: str = 'cost',
         enlarge_obstacle: float = 0.0,
     ):
@@ -269,22 +308,35 @@ class Astar(Dijkstra):
         self.name = "Astar"
 
     def calculateCost(self, idx, cost_g):  # コストの計算
-        for n in self.listFreeNeigbor(idx):
-            evaluation_f = cost_g + self.cost(n) + self.c(n, idx) + self.__h(n)  # 評価を計算
-            if self.isOpened(n):  # オープンリストに含まれているか
-                its_index, its_cost_f, its_cost_g = self.open_list[[val[0] for val in self.open_list].index(self.id(n))]
-                if its_cost_f > evaluation_f:  # 評価が更新されなければ繰り返しを戻す
-                    self.open_list.remove([its_index, its_cost_f, its_cost_g])
+        for neigbor_idx in self.listFreeNeigbor(idx):
+            evaluation_f = cost_g + self.cost(neigbor_idx) + self.c(neigbor_idx, idx) + self.__h(neigbor_idx)  # 評価を計算
+            if self.isOpened(neigbor_idx):  # オープンリストに含まれているか
+                neigbor_cost_f = self.is_opened_map[neigbor_idx[0]][neigbor_idx[1]][1]
+                neigbor_cost_g = self.is_opened_map[neigbor_idx[0]][neigbor_idx[1]][2]
+                # neigbor_idx, neigbor_cost_f, neigbor_cost_g = self.open_list[[val[0] for val in self.open_list].index(self.id(neigbor_idx))]
+                if neigbor_cost_f > evaluation_f:
+                    self.open_list.remove([self.id(neigbor_idx), neigbor_cost_f, neigbor_cost_g])
+                    self.is_opened_map[neigbor_idx[0]][neigbor_idx[1]][0] = 0.0
+                    self.is_opened_map[neigbor_idx[0]][neigbor_idx[1]][1] = 0.0
+                    self.is_opened_map[neigbor_idx[0]][neigbor_idx[1]][2] = 0.0
                 else:
                     continue
-            elif self.isClosed(n):  # クローズドリストに含まれているか
-                its_index, its_cost_f, its_cost_g = self.closed_list[[val[0] for val in self.closed_list].index(self.id(n))]
-                if its_cost_f > evaluation_f:
-                    self.closed_list.remove([its_index, its_cost_f, its_cost_g])
+            elif self.isClosed(neigbor_idx):  # クローズドリストに含まれているか
+                neigbor_cost_f = self.is_closed_map[neigbor_idx[0]][neigbor_idx[1]][1]
+                neigbor_cost_g = self.is_closed_map[neigbor_idx[0]][neigbor_idx[1]][2]
+                # its_idx, neigbor_cost_f, neigbor_cost_g = self.closed_list[[val[0] for val in self.closed_list].index(self.id(neigbor_idx))]
+                if neigbor_cost_f > evaluation_f:
+                    # self.closed_list.remove([neigbor_idx, neigbor_cost_f, neigbor_cost_g])
+                    self.is_closed_map[neigbor_idx[0]][neigbor_idx[1]][0] = 0.0
+                    self.is_closed_map[neigbor_idx[0]][neigbor_idx[1]][1] = 0.0
+                    self.is_closed_map[neigbor_idx[0]][neigbor_idx[1]][2] = 0.0
                 else:
                     continue
-            self.parent_id_map[n[0]][n[1]] = self.id(idx)
-            self.open_list.append([self.id(n), evaluation_f, evaluation_f - self.__h(n)])
+            self.parent_id_map[neigbor_idx[0]][neigbor_idx[1]] = self.id(idx)
+            self.open_list.append([self.id(neigbor_idx), evaluation_f, evaluation_f - self.__h(neigbor_idx)])
+            self.is_opened_map[neigbor_idx[0]][neigbor_idx[1]][0] = 1.0
+            self.is_opened_map[neigbor_idx[0]][neigbor_idx[1]][1] = evaluation_f
+            self.is_opened_map[neigbor_idx[0]][neigbor_idx[1]][2] = evaluation_f - self.__h(neigbor_idx)
 
     def __h(self, u):
         return 0.9 * np.linalg.norm(self.goal_idx - u)
@@ -304,8 +356,9 @@ class DstarLite(GridBasePathPlanning):
         self.heuristics = heuristics
 
         if mapper is not None:
-            self.local_grid_map = np.full(mapper.shape, 0.5, dtype=float)  # Local Map is Obstacle Occupancy Grid Map
+            self.local_grid_map = np.full(mapper.map.shape, 0.5, dtype=float)  # Local Map is Obstacle Occupancy Grid Map
             self.metric_grid_map = np.full(self.grid_cost_num, -1.0, dtype=np.float)  # Metric Map shows wheter the grid is observed, -1: Unobserved, 0: Free, 1: Obstacles
+            self.is_in_U_map = self.local_grid_map = np.full(mapper.mapshape, 0, dtype=np.int16)
 
         self.U = []
         self.km = 0.0
@@ -330,6 +383,8 @@ class DstarLite(GridBasePathPlanning):
         self.local_grid_map[self.start_idx[0]][self.start_idx[1]] = 0.0
         self.metric_grid_map = np.full(self.grid_num, -1.0, dtype=np.float)  # 経路計画で使用するマップ
         self.metric_grid_map[self.start_idx[0]][self.start_idx[1]] = 0
+
+        self.is_in_U_map = self.local_grid_map = np.full(mapper.map.shape, 0, dtype=np.int16)
 
         self.g_map = np.full(self.local_grid_map.shape, float('inf'))
         self.rhs_map = np.full(self.local_grid_map.shape, float('inf'))
@@ -457,7 +512,7 @@ class DstarLite(GridBasePathPlanning):
                 elif math.isclose(self.rhs(u), c_old + self.g(v)):
                     if not self.isGoal(u):
                         self.rhs_map[u[0]][u[1]] = self.__getMinRhs(u)
-                self.__updateVertex(u)
+                self.updateVertex(u)
 
             self.computeShortestPath(self.current_idx)
 
@@ -590,7 +645,7 @@ class DstarLite(GridBasePathPlanning):
                 for s in self.neigborGrids(u):
                     if not self.isGoal(s):
                         self.rhs_map[s[0]][s[1]] = min(self.rhs(s), self.__c(s, u) + self.g(u))
-                    self.__updateVertex(s)
+                    self.updateVertex(s)
             else:
                 g_old = self.g(u)
                 self.g_map[u[0]][u[1]] = float('inf')
@@ -598,7 +653,7 @@ class DstarLite(GridBasePathPlanning):
                     if math.isclose(self.rhs(s), self.__c(s, u) + g_old):
                         if not self.isGoal(s):
                             self.rhs_map[s[0]][s[1]] = self.__getMinRhs(s)
-                    self.__updateVertex(s)
+                    self.updateVertex(s)
             U_row = [row[1] for row in self.U]
             if len(U_row) == 0:
                 break
@@ -622,8 +677,12 @@ class DstarLite(GridBasePathPlanning):
                 return True
         return False
 
-    def __updateVertex(self, u):
-        u_flag = list(u) in [row[0] for row in self.U]
+    def updateVertex(self, u):
+        if self.is_in_U_map[u[0]][u[1]] == 1:
+            u_flag = True
+        else:
+            u_flag = False
+        # u_flag = list(u) in [row[0] for row in self.U]
         g_u = self.g(u)
         rhs_u = self.rhs(u)
         if not math.isclose(g_u, rhs_u) and u_flag:
@@ -635,11 +694,13 @@ class DstarLite(GridBasePathPlanning):
 
     def __uAppend(self, u, u_num):
         self.U.append([list(u), u_num])
+        self.is_in_U_map[u[0]][u[1]] = 1
 
     def __uRemove(self, u):
         U_row = [row[0] for row in self.U]
         idx = U_row.index(list(u))
         self.U.remove([list(u), self.U[idx][1]])
+        self.is_in_U_map[u[0]][u[1]] = 0
 
     def __uUpdate(self, u, u_num_new):
         U_row = [row[0] for row in self.U]

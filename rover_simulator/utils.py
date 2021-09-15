@@ -62,13 +62,13 @@ def drawGrid(idx: np.ndarray, grid_width: float, color: str, alpha: float, ax, e
         ax.add_patch(r)
 
 
-def state_transition(pose: np.ndarray, control_inputs: np.ndarray, time: float) -> np.ndarray:
+def state_transition(pose: np.ndarray, control_inputs: np.ndarray, dt: float) -> np.ndarray:
     nu, omega = control_inputs
     t0 = pose[2]
     if math.fabs(omega) < 1e-10:
-        new_pose = pose + np.array([nu * np.cos(t0), nu * np.sin(t0), omega]) * time
+        new_pose = pose + np.array([nu * np.cos(t0), nu * np.sin(t0), omega]) * dt
     else:
-        new_pose = pose + np.array([nu / omega * (np.sin(t0 + omega * time) - np.sin(t0)), nu / omega * (-np.cos(t0 + omega * time) + np.cos(t0)), omega * time])
+        new_pose = pose + np.array([nu / omega * (np.sin(t0 + omega * dt) - np.sin(t0)), nu / omega * (-np.cos(t0 + omega * dt) + np.cos(t0)), omega * dt])
     while new_pose[2] > np.pi:
         new_pose[2] -= 2 * np.pi
     while new_pose[2] < -np.pi:
