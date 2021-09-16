@@ -60,7 +60,7 @@ class GridMapper(Mapper):
                 if isInRange(np.arctan2(j, i), ang_range_min, ang_range_max):
                     sensed_grids.append(u)
                     if self.map[u[0]][u[1]] <= 0.5:
-                        self.map[u[0]][u[1]] = 0.0
+                        self.map[u[0]][u[1]] = 0.01
 
         # List up new obstacles
         new_obstacles = []
@@ -138,6 +138,10 @@ class GridMapper(Mapper):
         return np.append(idx * self.grid_width, 0.0)
 
     def isOutOfBounds(self, idx: np.ndarray) -> bool:
+        # if np.any(idx >= self.grid_num) or np.any(idx < [0, 0]):
+        #     return True
+        # else:
+        #     return False
         if idx[0] >= self.grid_num[0]:
             return True
         elif idx[0] < 0:
@@ -147,10 +151,6 @@ class GridMapper(Mapper):
         elif idx[1] < 0:
             return True
         return False
-        # if np.any(idx >= self.grid_num) or np.any(idx < [0, 0]):
-        #     return True
-        # else:
-        #     return False
 
     def draw_map(
         self,

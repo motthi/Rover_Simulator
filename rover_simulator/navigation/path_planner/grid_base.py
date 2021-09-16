@@ -384,7 +384,7 @@ class DstarLite(GridBasePathPlanning):
         self.metric_grid_map = np.full(self.grid_num, -1.0, dtype=np.float)  # 経路計画で使用するマップ
         self.metric_grid_map[self.start_idx[0]][self.start_idx[1]] = 0
 
-        self.is_in_U_map = self.local_grid_map = np.full(mapper.map.shape, 0, dtype=np.int16)
+        self.is_in_U_map = np.full(mapper.map.shape, 0, dtype=np.int16)
 
         self.g_map = np.full(self.local_grid_map.shape, float('inf'))
         self.rhs_map = np.full(self.local_grid_map.shape, float('inf'))
@@ -429,11 +429,11 @@ class DstarLite(GridBasePathPlanning):
         self.newObstacles = []
         self.newFrees = []
 
-        for u, _ in mapper.observed_grids:
+        for u, c in mapper.observed_grids:
             if self.isOutOfBounds(u):
                 continue
-            prev_occ = copy.copy(self.local_grid_map[u[0]][u[1]])
-            self.local_grid_map[u[0]][u[1]] = copy.copy(mapper.map[u[0]][u[1]])
+            prev_occ = self.local_grid_map[u[0]][u[1]]
+            self.local_grid_map[u[0]][u[1]] = mapper.map[u[0]][u[1]]
             if self.local_grid_map[u[0]][u[1]] > 0.5 and prev_occ <= 0.5:
                 self.newObstacles.append(u)
             elif self.local_grid_map[u[0]][u[1]] <= 0.5 and prev_occ > 0.5:
@@ -458,6 +458,7 @@ class DstarLite(GridBasePathPlanning):
                 if not self.__c(w, x) == float('inf'):
                     update_to_obstacle_list.append([w, x])
                     update_to_obstacle_list.append([x, w])
+
         # Obstacle -> Free
         for u in self.newFrees:
             if self.isOutOfBounds(u):
@@ -706,6 +707,7 @@ class DstarLite(GridBasePathPlanning):
         U_row = [row[0] for row in self.U]
         idx = U_row.index(list(u))
         self.U[idx][1] = u_num_new
+        self.is_in_U_map[u[0]][u[1]] = 1
 
     def __getMinRhs(self, u):
         min_rhs = float('inf')
