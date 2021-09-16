@@ -358,7 +358,7 @@ class DstarLite(GridBasePathPlanning):
         if mapper is not None:
             self.local_grid_map = np.full(mapper.map.shape, 0.5, dtype=float)  # Local Map is Obstacle Occupancy Grid Map
             self.metric_grid_map = np.full(self.grid_cost_num, -1.0, dtype=np.float)  # Metric Map shows wheter the grid is observed, -1: Unobserved, 0: Free, 1: Obstacles
-            self.is_in_U_map = self.local_grid_map = np.full(mapper.mapshape, 0, dtype=np.int16)
+            self.is_in_U_map = np.full(mapper.mapshape, 0, dtype=np.int16)
 
         self.U = []
         self.km = 0.0
@@ -380,15 +380,16 @@ class DstarLite(GridBasePathPlanning):
             raise ValueError("Goal position is out of bounds")
 
         self.local_grid_map = copy.copy(mapper.map)  # センシングによって構築したマップ
-        self.local_grid_map[self.start_idx[0]][self.start_idx[1]] = 0.0
         self.metric_grid_map = np.full(self.grid_num, -1.0, dtype=np.float)  # 経路計画で使用するマップ
-        self.metric_grid_map[self.start_idx[0]][self.start_idx[1]] = 0
-
-        self.is_in_U_map = np.full(mapper.map.shape, 0, dtype=np.int16)
-
         self.g_map = np.full(self.local_grid_map.shape, float('inf'))
         self.rhs_map = np.full(self.local_grid_map.shape, float('inf'))
+        self.is_in_U_map = np.full(self.local_grid_map.shape, 0, dtype=np.int16)
+
+        self.local_grid_map[self.start_idx[0]][self.start_idx[1]] = 0.0
         self.rhs_map[self.goal_idx[0]][self.goal_idx[1]] = 0
+        self.metric_grid_map[self.start_idx[0]][self.start_idx[1]] = 0
+
+        self.U = []
         self.__uAppend(self.goal_idx, [self.__h(self.start_idx, self.goal_idx), 0])
         self.previous_idx = np.array(self.start_idx)
 
@@ -398,24 +399,24 @@ class DstarLite(GridBasePathPlanning):
         self.grid_map = copy.copy(mapper.map)
 
         self.local_grid_map = copy.copy(mapper.map)
-        self.local_grid_map[self.start_idx[0]][self.start_idx[1]] = 0.0
         self.metric_grid_map = np.full(self.grid_num, -1.0, dtype=np.float)
-        self.metric_grid_map[self.start_idx[0]][self.start_idx[1]] = 0
-
         self.g_map = np.full(self.local_grid_map.shape, float('inf'))
         self.rhs_map = np.full(self.local_grid_map.shape, float('inf'))
-        self.rhs_map[self.goal_idx[0]][self.goal_idx[1]] = 0
-        self.__uAppend(self.goal_idx, [self.__h(self.start_idx, self.goal_idx), 0])
-        self.previous_idx = np.array(self.start_idx)
+        self.is_in_U_map = np.full(mapper.map.shape, 0, dtype=np.int16)
 
-        self.U = []
+        self.local_grid_map[self.start_idx[0]][self.start_idx[1]] = 0.0
+        self.metric_grid_map[self.start_idx[0]][self.start_idx[1]] = 0
+        self.rhs_map[self.goal_idx[0]][self.goal_idx[1]] = 0
+
         self.km = 0.0
+        self.U = []
+        self.__uAppend(self.goal_idx, [self.__h(self.start_idx, self.goal_idx), 0])
 
         self.pathToTake = []
         self.takenPath = []
-
         self.newObstacles = []
 
+        self.previous_idx = np.array(self.start_idx)
         self.current_idx = self.start_idx
 
     def calculate_path(self):
@@ -655,6 +656,7 @@ class DstarLite(GridBasePathPlanning):
                         if not self.isGoal(s):
                             self.rhs_map[s[0]][s[1]] = self.__getMinRhs(s)
                     self.updateVertex(s)
+
             U_row = [row[1] for row in self.U]
             if len(U_row) == 0:
                 break
