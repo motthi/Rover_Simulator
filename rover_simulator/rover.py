@@ -46,7 +46,7 @@ class BasicRover(Rover):
         self,
         pose: np.ndarray, radius: float,
         sensor: Sensor = None, localizer: Localizer = None, path_planner: PathPlanner = None,
-        controller: Controller = None, sensing_planner: SensingPlanner = None,
+        controller: Controller = None, sensing_planner: SensingPlanner = SensingPlanner(),
         mapper: Mapper = None, collision_detector: CollisionDetector = IgnoreCollision(),
         history: History = None,
         color: str = "black", waypoint_color: str = 'blue'
@@ -75,7 +75,9 @@ class BasicRover(Rover):
             return
 
         # Sensing
-        sensed_obstacles = self.sensor.sense(self) if self.sensor is not None else []
+        sensed_obstacles = None
+        if self.sensing_planner.decide(rover_pose=self.estimated_pose):
+            sensed_obstacles = self.sensor.sense(self) if self.sensor is not None else []
 
         # Mapping
         self.mapper.update(self.estimated_pose, sensed_obstacles) if self.mapper is not None else None
@@ -372,36 +374,37 @@ class RoverAnimation():
                 obs = patches.Circle(xy=(obstacle.pos[0], obstacle.pos[1]), radius=obstacle.r, alpha=alpha, fc='black', ec='black', zorder=-1.0)
                 elems.append(ax.add_patch(obs))
 
-            if map_name == 'cost':
-                draw_map = self.rover.path_planner.g_map
-                cmap = 'plasma'
-                vmin = None
-                vmax = None
-            elif map_name == 'metric':
-                draw_map = self.rover.path_planner.metric_grid_map
-                cmap = environment_cmap
-                vmin = -1.0
-                vmax = 1.0
-            elif map_name == 'local':
-                draw_map = self.rover.path_planner.local_grid_map
-                cmap = 'Greys'
-                vmin = 0.0
-                vmax = 1.0
-            im = ax.imshow(
-                cv2.rotate(draw_map, cv2.ROTATE_90_COUNTERCLOCKWISE),
-                cmap=cmap,
-                vmin=vmin,
-                vmax=vmax,
-                alpha=0.5,
-                extent=(
-                    -self.rover.path_planner.grid_width / 2,
-                    self.rover.path_planner.grid_width * self.rover.path_planner.grid_num[0] - self.rover.path_planner.grid_width / 2,
-                    -self.rover.path_planner.grid_width / 2, self.rover.path_planner.grid_width * self.rover.path_planner.grid_num[1] - self.rover.path_planner.grid_width / 2
-                ),
-                zorder=1.0
-            )
-            elems.append(im)
-            elems.append(plt.colorbar(im))
+            if map_name != 'table':
+                if map_name == 'cost':
+                    draw_map = self.rover.path_planner.g_map
+                    cmap = 'plasma'
+                    vmin = None
+                    vmax = None
+                elif map_name == 'metric':
+                    draw_map = self.rover.path_planner.metric_grid_map
+                    cmap = environment_cmap
+                    vmin = -1.0
+                    vmax = 1.0
+                elif map_name == 'local':
+                    draw_map = self.rover.path_planner.local_grid_map
+                    cmap = 'Greys'
+                    vmin = 0.0
+                    vmax = 1.0
+                im = ax.imshow(
+                    cv2.rotate(draw_map, cv2.ROTATE_90_COUNTERCLOCKWISE),
+                    cmap=cmap,
+                    vmin=vmin,
+                    vmax=vmax,
+                    alpha=0.5,
+                    extent=(
+                        -self.rover.path_planner.grid_width / 2,
+                        self.rover.path_planner.grid_width * self.rover.path_planner.grid_num[0] - self.rover.path_planner.grid_width / 2,
+                        -self.rover.path_planner.grid_width / 2, self.rover.path_planner.grid_width * self.rover.path_planner.grid_num[1] - self.rover.path_planner.grid_width / 2
+                    ),
+                    zorder=1.0
+                )
+                elems.append(im)
+                elems.append(plt.colorbar(im))
 
         # Draw rover real pose history
         if not elems is None:
