@@ -173,6 +173,10 @@ class World():
                     color=rover.color
                 )
 
+                for i, sensing_result in enumerate(rover.history.sensing_results):
+                    if sensing_result is not None:
+                        ax.plot(rover.history.estimated_poses[i][0], rover.history.estimated_poses[i][1], marker="o", c="red", ms=5)
+
             # Draw Last Rover Position
             x, y, theta = rover.real_pose
             xn = x + rover.r * np.cos(theta)
@@ -289,6 +293,7 @@ class World():
             # Draw History of sensing_result
             sensed_obstacles = rover.history.sensing_results[start_step + i]
             if not sensed_obstacles is None:
+                ax.plot(x, y, marker="o", c="red", ms=5)
                 for sensed_obstacle in sensed_obstacles:
                     x, y, theta = rover.history.estimated_poses[start_step + i]
 
