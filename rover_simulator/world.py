@@ -41,7 +41,8 @@ class World():
         rover_idx: int,
         goal_pos: np.ndarray, goal_range: float = 2.0,
         stuck_step: int = 50,
-        stuck_distance: float = 5.0
+        stuck_distance: float = 5.0,
+        final_step: int = 1000
     ):
         dist_to_goal = float('inf')
         rover = self.rovers[rover_idx]
@@ -61,6 +62,9 @@ class World():
                 if traversed_dist < stuck_distance:
                     stuck_flag = True
                     break
+            if self.step > final_step:
+                stuck_flag = True
+                break
         if dist_to_goal < goal_range:
             return "Succeed"
         elif stuck_flag:
