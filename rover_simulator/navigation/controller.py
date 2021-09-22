@@ -68,7 +68,7 @@ class DWAController(Controller):
     def calculate_control_inputs(
         self,
         rover_pose: np.ndarray,
-        nu: float, omega: float, dt: float,
+        v: float, w: float, dt: float,
         goal_pose: np.ndarray,
         obstacles: List[Obstacle]
     ):
@@ -76,7 +76,7 @@ class DWAController(Controller):
         best_u = [0.0, 0.0]
         obstacle_list = np.array([[obstacle.pos[0], obstacle.pos[1]] for obstacle in obstacles])
         vs = [self.nu_min, self.nu_max, self.omega_min, self.omega_max]
-        vd = [nu - self.nu_max_acc, nu + self.nu_max, omega - self.omega_max_acc, omega + self.omega_max_acc]
+        vd = [v - self.nu_max_acc, v + self.nu_max, w - self.omega_max_acc, w + self.omega_max_acc]
         dw = [max(vs[0], vd[0]), min(vs[1], vd[1]), max(vs[2], vd[2]), min(vs[3], vd[3])]
         # self.obstacles = obstacles
         # if len(self.obstacles) == 0:
