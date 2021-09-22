@@ -30,7 +30,7 @@ class Controller():
     def __init__(self) -> None:
         pass
 
-    def calculate_control_inputs(self) -> Tuple(float, float):
+    def calculate_control_inputs(self) -> Tuple[float, float]:
         raise NotImplementedError()
 
 
