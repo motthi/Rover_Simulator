@@ -1,3 +1,4 @@
+from typing import Dict, List, Tuple
 import numpy as np
 
 
@@ -5,7 +6,7 @@ class Rover():
     def __init__(self) -> None:
         pass
 
-    def one_step(self, _):
+    def one_step(self, _) -> None:
         raise NotImplementedError
 
 
@@ -13,7 +14,7 @@ class Localizer():
     def __init__(self) -> None:
         pass
 
-    def estimate_pose(self):
+    def estimate_pose(self) -> np.ndarray:
         raise NotImplementedError
 
 
@@ -21,7 +22,7 @@ class Sensor():
     def __init__(self) -> None:
         pass
 
-    def sense(self):
+    def sense(self) -> List[Dict]:
         raise NotImplementedError
 
 
@@ -29,7 +30,7 @@ class Controller():
     def __init__(self) -> None:
         pass
 
-    def calculate_control_inputs(self):
+    def calculate_control_inputs(self) -> Tuple(float, float):
         raise NotImplementedError()
 
 
@@ -37,7 +38,7 @@ class Mapper():
     def __init__(self) -> None:
         pass
 
-    def update(self):
+    def update(self) -> None:
         raise NotImplementedError
 
 
