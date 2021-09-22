@@ -7,7 +7,6 @@ import matplotlib.patches as patches
 from scipy.spatial import cKDTree
 from typing import List, Tuple
 from rover_simulator.core import*
-from rover_simulator.utils import drawGrid
 
 if 'google.colab' in sys.modules:
     from tqdm.notebook import tqdm  # Google Colaboratory
@@ -135,7 +134,8 @@ class World():
         xlim: List[float], ylim: List[float],
         figsize: Tuple[float, float] = (8, 8),
         enlarge_obstacle: float = 0.0,
-        draw_waypoints: bool = False
+        draw_waypoints: bool = False,
+        draw_sensing_points: bool = True
     ):
         self.fig = plt.figure(figsize=figsize)
         ax = self.fig.add_subplot(111)
@@ -174,7 +174,7 @@ class World():
                 )
 
                 for i, sensing_result in enumerate(rover.history.sensing_results):
-                    if sensing_result is not None:
+                    if sensing_result is not None and draw_sensing_points:
                         ax.plot(rover.history.estimated_poses[i][0], rover.history.estimated_poses[i][1], marker="o", c="red", ms=5)
 
             # Draw Last Rover Position
@@ -196,8 +196,6 @@ class World():
                         color=rover.waypoint_color
                     )
 
-        # plt.show()
-
     def animate(
         self,
         xlim: List[float], ylim: List[float],
@@ -205,7 +203,8 @@ class World():
         figsize: Tuple[float, float] = (8, 8),
         enlarge_obstacle: float = 0.0,
         save_path: str = None,
-        debug: bool = False
+        debug: bool = False,
+        draw_sensing_points: bool = True
     ) -> None:
         end_step = self.step if end_step is None else end_step
         fig = plt.figure(figsize=figsize)
@@ -234,10 +233,10 @@ class World():
         pbar = tqdm(total=end_step - start_step)
         if debug is True:
             for i in range(end_step - start_step):
-                self.animate_one_step(i, ax, elems, start_step, pbar)
+                self.animate_one_step(i, ax, elems, start_step, pbar, draw_sensing_points)
         else:
             self.ani = anm.FuncAnimation(
-                fig, self.animate_one_step, fargs=(ax, elems, start_step, pbar),
+                fig, self.animate_one_step, fargs=(ax, elems, start_step, pbar, draw_sensing_points),
                 frames=end_step - start_step, interval=int(self.time_interval * 1000),
                 repeat=False
             )
@@ -245,7 +244,7 @@ class World():
         if save_path is not None:
             self.ani.save(save_path, writer='ffmpeg')
 
-    def animate_one_step(self, i, ax, elems, start_step, pbar):
+    def animate_one_step(self, i, ax, elems, start_step, pbar, draw_sensing_points):
         while elems:
             elems.pop().remove()
 
@@ -293,7 +292,9 @@ class World():
             # Draw History of sensing_result
             sensed_obstacles = rover.history.sensing_results[start_step + i]
             if not sensed_obstacles is None:
-                ax.plot(x, y, marker="o", c="red", ms=5)
+                # Draw Sensing Point
+                ax.plot(x, y, marker="o", c="red", ms=5) if draw_sensing_points else None
+
                 for sensed_obstacle in sensed_obstacles:
                     x, y, theta = rover.history.estimated_poses[start_step + i]
 
