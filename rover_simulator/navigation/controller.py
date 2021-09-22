@@ -284,7 +284,6 @@ class ArcPathController(Controller):
                         break
                 traj_list.append(traj) if is_collision is False else None
 
-        # print("=" * 100)
         for trajectory in traj_list:
             # to_goal_cost = self.to_goal_cost_gain * self.calc_to_goal_cost(trajectory, goal_pose)
             # speed_cost = self.speed_gain * (self.v_max - trajectory[-1, 3])
@@ -293,7 +292,6 @@ class ArcPathController(Controller):
             # final_cost = to_goal_cost + speed_cost + ob_cost
             final_cost = to_goal_cost  # + speed_cost
 
-            # print("[{:.2f},{:.2f}]\t[{:.2f},{:.2f}]\t{}\t{:.2f}\t{:.2f}\t".format(trajectory[-1][3], trajectory[-1][4], trajectory[-1][0], trajectory[-1][1], goal_pose, to_goal_cost, final_cost))
             # search minimum trajectory
             if min_cost >= final_cost:
                 min_cost = final_cost
@@ -304,7 +302,6 @@ class ArcPathController(Controller):
                 # best omega=0 rad/s (heading to the goal with
                 # angle difference of 0)
                 # best_u[1] = self.w_min
-        # print("\t", best_u, min_cost)
         return best_u
 
     def calc_dist_to_goal_cost(self, trajectory, goal):
