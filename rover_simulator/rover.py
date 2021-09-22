@@ -11,6 +11,7 @@ from rover_simulator.core import*
 from rover_simulator.utils import state_transition, environment_cmap
 from rover_simulator.core import Obstacle, SensingPlanner
 from rover_simulator.world import World
+from rover_simulator.history import History
 from rover_simulator.collision_detector import IgnoreCollision
 from rover_simulator.navigation.path_planner import PathPlanner
 from rover_simulator.navigation.controller import DWAController
@@ -22,23 +23,6 @@ elif 'ipykernel' in sys.modules:
     from tqdm.notebook import tqdm    # Jupyter Notebook
 else:
     from tqdm import tqdm    # ipython, python script, ...
-
-
-class History():
-    def __init__(self) -> None:
-        self.steps = []
-        self.real_poses = []
-        self.estimated_poses = []
-        self.sensing_results = []
-        self.waypoints = []
-
-    def append(self, *args, **kwargs) -> None:
-        self.steps.append(len(self.steps))
-        self.real_poses.append(kwargs['real_pose'])
-        self.estimated_poses.append(kwargs['estimated_pose'])
-        self.sensing_results.append(kwargs['sensing_result'])
-        if 'waypoints' in kwargs:
-            self.waypoints.append(copy.copy(kwargs['waypoints']))
 
 
 class BasicRover(Rover):
