@@ -17,7 +17,7 @@ class RRT(PathPlanner):
         self,
         start_pos=None, goal_pos=None,
         explore_region=[[0, 20], [0, 20]],
-        know_obstacles=[],
+        known_obstacles=[],
         enlarge_range=0.0,
         expand_distance=3.0,
         goal_sample_rate=0.9,
@@ -34,9 +34,9 @@ class RRT(PathPlanner):
         self.expand_dis = expand_distance
         self.path_resolution = path_resolution
 
-        # self.know_obstacles = know_obstacles
-        self.obstacle_list = [[obstacle.pos[0], obstacle.pos[1], obstacle.r + enlarge_range] for obstacle in know_obstacles]
-        # obstacle_positions = [obstacle.pos for obstacle in know_obstacles] if not know_obstacles is None else None
+        # self.known_obstacles = known_obstacles
+        self.obstacle_list = [[obstacle.pos[0], obstacle.pos[1], obstacle.r + enlarge_range] for obstacle in known_obstacles]
+        # obstacle_positions = [obstacle.pos for obstacle in known_obstacles] if not known_obstacles is None else None
         # self.obstacle_kdTree = cKDTree(obstacle_positions)
 
         self.name = "RRT"
@@ -190,7 +190,7 @@ class RRTstar(RRT):
         self,
         start_pos=None, goal_pos=None,
         explore_region=[[0, 20], [0, 20]],
-        know_obstacles=[],
+        known_obstacles=[],
         enlarge_range=0.0,
         expand_distance=3.0,
         goal_sample_rate=0.9,
@@ -205,7 +205,7 @@ class RRTstar(RRT):
         obstacleList:obstacle Positions [[x,y,size],...]
         randArea:Random Sampling Area [min,max]
         """
-        super().__init__(start_pos, goal_pos, explore_region, know_obstacles, enlarge_range, expand_distance, path_resolution, goal_sample_rate)
+        super().__init__(start_pos, goal_pos, explore_region, known_obstacles, enlarge_range, expand_distance, path_resolution, goal_sample_rate)
         self.connect_circle_dist = connect_circle_dist
         self.search_until_max_iter = search_until_max_iter
         self.name = "RRTstar"
