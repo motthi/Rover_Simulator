@@ -14,7 +14,7 @@ class GridMapper(Mapper):
         grid_size: np.ndarray = np.array([20, 20]),
         grid_width: float = 0.1,
         sensor: Sensor = None,
-        know_obstacles=[],
+        known_obstacles=[],
         rover_r: float = 0.0,
         expand_rate: float = 1.0
     ) -> None:
@@ -34,7 +34,7 @@ class GridMapper(Mapper):
         self.observed_grids = []
         self.retain_range = float('inf')
 
-        for obstacle in know_obstacles:
+        for obstacle in known_obstacles:
             self.update_circle(obstacle.pos, (obstacle.r + rover_r) * expand_rate, 1.0)
 
     def reset(self) -> None:
@@ -208,8 +208,8 @@ class TableMapper(Mapper):
     def __init__(
         self,
         sensor: Sensor = None,
-        know_obstacles=[],
         rover_r: float = 0.0,
+        known_obstacles=[],
         retain_range: float = 10.0
     ) -> None:
         self.sensor = sensor
@@ -217,7 +217,7 @@ class TableMapper(Mapper):
         self.retain_range = retain_range
         self.obstacle_kdTree = None
         self.obstacles_table = []
-        for obstacle in know_obstacles:
+        for obstacle in known_obstacles:
             self.obstacles_table.append(obstacle)
 
     def reset(self) -> None:

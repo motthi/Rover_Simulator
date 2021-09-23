@@ -49,7 +49,7 @@ class World():
         stuck_flag = False
         while dist_to_goal >= goal_range:
             if rover.collision_detector.detect_collision(rover):
-                return "Collide"
+                return "Collided"
             rover.one_step(self.time_interval)
             self.step += 1
             dist_to_goal = np.linalg.norm(rover.estimated_pose[0:2] - goal_pos[0:2])
