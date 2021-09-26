@@ -20,6 +20,8 @@ class History():
         self,
         time_interval: float = 0.1,
         rover_r: float = 0.5,
+        sensor_range: float = 10.0,
+        sensor_fov: float = np.pi / 2,
         rover_color: str = 'black',
         waypoint_color: str = 'blue'
     ) -> None:
@@ -28,6 +30,8 @@ class History():
         self.estimated_poses = []
         self.sensing_results = []
         self.waypoints = []
+        self.sensor_range = sensor_range
+        self.sensor_fov = sensor_fov
         self.time_interval = time_interval
         self.rover_r = rover_r
         self.rover_color = rover_color
@@ -48,7 +52,8 @@ class History():
         obstacles: List[Obstacle] = [],
         enlarge_obstacle: float = 0.0,
         draw_waypoints: bool = False,
-        draw_sensing_points: bool = True
+        draw_sensing_points: bool = True,
+        draw_sensing_area: bool = True
     ):
         self.fig = plt.figure(figsize=figsize)
         ax = self.fig.add_subplot(111)
@@ -71,6 +76,17 @@ class History():
         for i, sensing_result in enumerate(self.sensing_results):
             if sensing_result is not None and draw_sensing_points:
                 ax.plot(self.real_poses[i][0], self.real_poses[i][1], marker="o", c="red", ms=5)
+                x, y, theta = self.estimated_poses[i]
+                ax.plot(x, y, marker="o", c="red", ms=5)
+                if draw_sensing_area:
+                    sensing_range = patches.Wedge(
+                        (x, y), self.sensor_range,
+                        theta1=np.rad2deg(theta - self.sensor_fov / 2),
+                        theta2=np.rad2deg(theta + self.sensor_fov / 2),
+                        alpha=0.5,
+                        color="mistyrose"
+                    )
+                    ax.add_patch(sensing_range)
 
         # Draw Last Rover Position
         x, y, theta = self.real_poses[-1]
@@ -184,6 +200,17 @@ class History():
         estimated_pose = self.estimated_poses[start_step + i]
         if not sensed_obstacles is None:
             ax.plot(real_pose[0], real_pose[1], marker="o", c="red", ms=5)
+
+            ax.plot(real_pose[0], real_pose[1], marker="o", c="red", ms=5)
+            sensing_range = patches.Wedge(
+                (real_pose[0], real_pose[1]), self.sensor_range,
+                theta1=np.rad2deg(real_pose[2] - self.sensor_fov / 2),
+                theta2=np.rad2deg(real_pose[2] + self.sensor_fov / 2),
+                alpha=0.5,
+                color="mistyrose"
+            )
+            elems.append(ax.add_patch(sensing_range))
+
             for sensed_obstacle in sensed_obstacles:
                 distance = sensed_obstacle['distance']
                 angle = sensed_obstacle['angle'] + estimated_pose[2]
@@ -197,17 +224,17 @@ class History():
                 enl_obs = patches.Circle(xy=(xn, yn), radius=radius + self.rover_r, fc='blue', ec='blue', alpha=0.3)
                 elems.append(ax.add_patch(enl_obs))
 
-            # Draw History of waypoints
-            if len(self.waypoints) != 0:
-                waypoints = self.waypoints[start_step + i]
-                elems += ax.plot(
-                    [e[0] for e in waypoints],
-                    [e[1] for e in waypoints],
-                    linewidth=1.0,
-                    linestyle=":",
-                    color="blue",
-                    alpha=0.5
-                )
+        # Draw History of waypoints
+        if len(self.waypoints) != 0:
+            waypoints = self.waypoints[start_step + i]
+            elems += ax.plot(
+                [e[0] for e in waypoints],
+                [e[1] for e in waypoints],
+                linewidth=1.0,
+                linestyle=":",
+                color="blue",
+                alpha=0.5
+            )
 
         # Draw History of estimated_pose
         xn, yn = estimated_pose[0:2] + self.rover_r * np.array([np.cos(estimated_pose[2]), np.sin(estimated_pose[2])])

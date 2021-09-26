@@ -175,7 +175,16 @@ class World():
 
                 for i, sensing_result in enumerate(rover.history.sensing_results):
                     if sensing_result is not None and draw_sensing_points:
-                        ax.plot(rover.history.estimated_poses[i][0], rover.history.estimated_poses[i][1], marker="o", c="red", ms=5)
+                        x, y, theta = rover.history.estimated_poses[i]
+                        ax.plot(x, y, marker="o", c="red", ms=5)
+                        sensing_range = patches.Wedge(
+                            (x, y), rover.sensor.range,
+                            theta1=np.rad2deg(theta - rover.sensor.fov / 2),
+                            theta2=np.rad2deg(theta + rover.sensor.fov / 2),
+                            alpha=0.5,
+                            color="mistyrose"
+                        )
+                        ax.add_patch(sensing_range)
 
             # Draw Last Rover Position
             x, y, theta = rover.real_pose
