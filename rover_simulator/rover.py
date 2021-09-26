@@ -202,7 +202,7 @@ class OnlinePathPlanningRover(DWARover):
         self.waypoint_dist = waypoint_dist
 
     def one_step(self, time_interval: float) -> None:
-        sensed_obstacles = []
+        sensed_obstacles = None
 
         # Collision Detection
         if self.collision_detector.detect_collision(self):
@@ -220,14 +220,9 @@ class OnlinePathPlanningRover(DWARover):
         # Sensing
         if sense_plan_flag:
             sensed_obstacles = self.sensor.sense(self) if self.sensor is not None else []
-
-        # Mapping
-        if sense_plan_flag:
             self.mapper.update(self.estimated_pose, sensed_obstacles) if self.mapper is not None else None
-
-        # Path Planning
-        if not self.mapper.isOutOfBounds(self.mapper.poseToIndex(self.estimated_pose)):
-            self.waypoints = self.path_planner.update_path(self.estimated_pose, self.mapper)
+            if not self.mapper.isOutOfBounds(self.mapper.poseToIndex(self.estimated_pose)):
+                self.waypoints = self.path_planner.update_path(self.estimated_pose, self.mapper)
 
         # Set next waypoint
         self.waypoint = self.waypoints[0]
