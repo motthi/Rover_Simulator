@@ -135,7 +135,8 @@ class World():
         figsize: Tuple[float, float] = (8, 8),
         enlarge_obstacle: float = 0.0,
         draw_waypoints: bool = False,
-        draw_sensing_points: bool = True
+        draw_sensing_points: bool = True,
+        draw_sensing_area: bool = False
     ):
         self.fig = plt.figure(figsize=figsize)
         ax = self.fig.add_subplot(111)
@@ -177,14 +178,15 @@ class World():
                     if sensing_result is not None and draw_sensing_points:
                         x, y, theta = rover.history.estimated_poses[i]
                         ax.plot(x, y, marker="o", c="red", ms=5)
-                        sensing_range = patches.Wedge(
-                            (x, y), rover.sensor.range,
-                            theta1=np.rad2deg(theta - rover.sensor.fov / 2),
-                            theta2=np.rad2deg(theta + rover.sensor.fov / 2),
-                            alpha=0.5,
-                            color="mistyrose"
-                        )
-                        ax.add_patch(sensing_range)
+                        if draw_sensing_area:
+                            sensing_range = patches.Wedge(
+                                (x, y), rover.sensor.range,
+                                theta1=np.rad2deg(theta - rover.sensor.fov / 2),
+                                theta2=np.rad2deg(theta + rover.sensor.fov / 2),
+                                alpha=0.5,
+                                color="mistyrose"
+                            )
+                            ax.add_patch(sensing_range)
 
             # Draw Last Rover Position
             x, y, theta = rover.real_pose

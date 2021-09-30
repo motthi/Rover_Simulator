@@ -73,20 +73,23 @@ class History():
             obs = patches.Circle(xy=(obstacle.pos[0], obstacle.pos[1]), radius=obstacle.r, fc='black', ec='black')
             ax.add_patch(obs)
 
+        # Draw Sensing Results
         for i, sensing_result in enumerate(self.sensing_results):
-            if sensing_result is not None and draw_sensing_points:
-                ax.plot(self.real_poses[i][0], self.real_poses[i][1], marker="o", c="red", ms=5)
-                x, y, theta = self.estimated_poses[i]
-                ax.plot(x, y, marker="o", c="red", ms=5)
+            if sensing_result is not None:
+                if draw_sensing_points:
+                    ax.plot(self.real_poses[i][0], self.real_poses[i][1], marker="o", c="red", ms=5)
                 if draw_sensing_area:
-                    sensing_range = patches.Wedge(
-                        (x, y), self.sensor_range,
-                        theta1=np.rad2deg(theta - self.sensor_fov / 2),
-                        theta2=np.rad2deg(theta + self.sensor_fov / 2),
-                        alpha=0.5,
-                        color="mistyrose"
-                    )
-                    ax.add_patch(sensing_range)
+                    x, y, theta = self.real_poses[i]
+                    ax.plot(x, y, marker="o", c="red", ms=5)
+                    if draw_sensing_area:
+                        sensing_range = patches.Wedge(
+                            (x, y), self.sensor_range,
+                            theta1=np.rad2deg(theta - self.sensor_fov / 2),
+                            theta2=np.rad2deg(theta + self.sensor_fov / 2),
+                            alpha=0.5,
+                            color="mistyrose"
+                        )
+                        ax.add_patch(sensing_range)
 
         # Draw Last Rover Position
         x, y, theta = self.real_poses[-1]
