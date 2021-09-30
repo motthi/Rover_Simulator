@@ -387,11 +387,15 @@ class DstarLite(GridBasePathPlanning):
 
         self.local_grid_map[self.start_idx[0]][self.start_idx[1]] = 0.0
         self.rhs_map[self.goal_idx[0]][self.goal_idx[1]] = 0
-        self.metric_grid_map[self.start_idx[0]][self.start_idx[1]] = 0
 
         self.U = []
         self.__uAppend(self.goal_idx, [self.__h(self.start_idx, self.goal_idx), 0])
         self.previous_idx = np.array(self.start_idx)
+
+        for idx, occ in np.ndenumerate(self.local_grid_map):
+            if occ > 0.5:
+                self.metric_grid_map[idx[0]][idx[1]] = 1.0
+        self.metric_grid_map[self.start_idx[0]][self.start_idx[1]] = 0
 
     def initialize(self, mapper: Mapper):
         self.grid_width = mapper.grid_width
@@ -419,6 +423,10 @@ class DstarLite(GridBasePathPlanning):
         self.previous_idx = np.array(self.start_idx)
         self.current_idx = self.start_idx
 
+        for idx, occ in np.ndenumerate(self.local_grid_map):
+            if occ > 0.5:
+                self.metric_grid_map[idx[0]][idx[1]] = 1.0
+
     def calculate_path(self):
         self.computeShortestPath(self.start_idx)
         waypoints = self.get_path(self.current_idx)
@@ -439,8 +447,9 @@ class DstarLite(GridBasePathPlanning):
                 self.newObstacles.append(u)
             elif self.local_grid_map[u[0]][u[1]] <= 0.5 and prev_occ > 0.5:
                 self.newFrees.append(u)
+        # self.local_grid_map[self.current_idx[0]][self.current_idx[1]] = 0.01
 
-        # 障害物周囲の辺をリストアップ
+        # Listup edge around obstacles
         update_to_obstacle_list = []
         update_to_free_list = []
         # Free -> Obstacle
@@ -459,7 +468,6 @@ class DstarLite(GridBasePathPlanning):
                 if not self.__c(w, x) == float('inf'):
                     update_to_obstacle_list.append([w, x])
                     update_to_obstacle_list.append([x, w])
-
         # Obstacle -> Free
         for u in self.newFrees:
             if self.isOutOfBounds(u):
@@ -479,14 +487,14 @@ class DstarLite(GridBasePathPlanning):
                     update_to_free_list.append([w, x])
                     update_to_free_list.append([x, w])
 
-        # コストが変わる辺をリストアップ
+        # Listup edge which cost is changed
         updated_vertex = []
         for vertex in update_to_obstacle_list:
             u, v = vertex[0], vertex[1]
             c = self.__c(u, v)
             updated_vertex.append([u, v, c, float('inf')])
 
-        # Metric Mapを更新
+        # Update Metric Map
         for u, _ in mapper.observed_grids:
             if self.local_grid_map[u[0]][u[1]] > 0.5:
                 self.metric_grid_map[u[0]][u[1]] = 1.0
@@ -498,6 +506,7 @@ class DstarLite(GridBasePathPlanning):
             c = self.__c(u, v)
             updated_vertex.append([u, v, float('inf'), c])
 
+        # Update Path
         if len(updated_vertex) > 0:
             self.km = self.km + self.__h(self.previous_idx, self.current_idx)
             self.previous_idx = self.current_idx
@@ -536,7 +545,7 @@ class DstarLite(GridBasePathPlanning):
                     next_idx = s_
             idx = next_idx
         # while not self.isGoal(idx):
-        for i in range(30):
+        for i in range(200):
             if self.isGoal(idx):
                 break
             next_idx = idx
@@ -573,7 +582,7 @@ class DstarLite(GridBasePathPlanning):
         xlim: List[float], ylim: List[float],
         figsize: Tuple[float, float] = (8, 8),
         map_name: str = 'cost',
-        obstacles: List[Obstacle] = None,
+        obstacles: List[Obstacle] = [],
         enlarge_obstacle: float = 0.0,
     ):
         self.fig = plt.figure(figsize=figsize)

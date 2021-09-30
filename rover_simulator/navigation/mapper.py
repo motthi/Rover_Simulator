@@ -35,6 +35,7 @@ class GridMapper(Mapper):
         self.retain_range = float('inf')
 
         for obstacle in known_obstacles:
+            self.obstacles_table.append(obstacle)
             self.update_circle(obstacle.pos, (obstacle.r + rover_r) * expand_rate, 1.0)
 
     def reset(self) -> None:
