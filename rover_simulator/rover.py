@@ -11,8 +11,9 @@ from rover_simulator.core import*
 from rover_simulator.utils import state_transition, environment_cmap
 from rover_simulator.core import Obstacle, SensingPlanner
 from rover_simulator.world import World
-from rover_simulator.history import History
+from rover_simulator.history import History, HistoryWithKalmanFilter
 from rover_simulator.collision_detector import IgnoreCollision
+from rover_simulator.navigation.localizer import KalmanFilter
 from rover_simulator.navigation.path_planner import PathPlanner
 from rover_simulator.navigation.controller import DWAController
 from rover_simulator.navigation.sensing_planner import SimpleSensingPlanner
@@ -132,6 +133,55 @@ class DWARover(BasicRover):
 
         # Record
         self.history.append(real_pose=self.real_pose, estimated_pose=self.estimated_pose, sensing_result=sensed_list, waypoints=self.waypoints)
+
+        # Move
+        self.real_pose = state_transition(self.real_pose, control_inputs, time_interval)
+
+        # Localization
+        self.estimated_pose = self.localizer.estimate_pose(self.estimated_pose, control_inputs, time_interval)
+
+
+class KalmanRover(BasicRover):
+    def __init__(
+        self,
+        pose: np.ndarray, radius: float,
+        sensor: Sensor = None, localizer: Localizer = None,
+        path_planner: PathPlanner = None, controller: Controller = None,
+        sensing_planner: SensingPlanner = SensingPlanner(),
+        mapper: Mapper = None, collision_detector: CollisionDetector = IgnoreCollision(),
+        history=HistoryWithKalmanFilter(),
+        color: str = "black", waypoint_color: str = 'blue'
+    ) -> None:
+        super().__init__(pose, radius, sensor, localizer, path_planner, controller, sensing_planner, mapper, collision_detector, history, color, waypoint_color)
+        if localizer is None:
+            self.localizer = KalmanFilter(pose)
+
+    def one_step(self, time_interval: float) -> None:
+        if self.collision_detector.detect_collision(self):
+            self.history.append(
+                real_pose=self.real_pose, estimated_pose=self.estimated_pose,
+                estimated_pose_cov=self.localizer.belief.cov, sensing_result=[]
+            )
+            return
+
+        # Sensing
+        sensed_obstacles = None
+        if self.sensing_planner.decide(rover_pose=self.estimated_pose):
+            sensed_obstacles = self.sensor.sense(self) if self.sensor is not None else []
+
+        # Mapping
+        self.mapper.update(self.estimated_pose, sensed_obstacles) if self.mapper is not None else None
+
+        # Calculate Control Inputs
+        control_inputs = self.controller.calculate_control_inputs()
+
+        # Record
+        self.history.append(
+            real_pose=self.real_pose,
+            estimated_pose=self.estimated_pose,
+            estimated_pose_cov=self.localizer.belief.cov,
+            sensing_result=sensed_obstacles
+        )
 
         # Move
         self.real_pose = state_transition(self.real_pose, control_inputs, time_interval)

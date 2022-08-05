@@ -3,6 +3,7 @@ import numpy as np
 import matplotlib.patches as patches
 from typing import List
 from matplotlib.colors import LinearSegmentedColormap
+from matplotlib.patches import Ellipse
 
 
 environment_cmap = LinearSegmentedColormap(
@@ -115,3 +116,9 @@ def updateP(p, p_):
     l = pToL(p)
     l = updateL(l, p_)
     return lToP(l)
+
+
+def sigma_ellipse(p, cov, n):
+    eig_vals, eig_vec = np.linalg.eig(cov)
+    ang = math.atan2(eig_vec[:, 0][1], eig_vec[:, 0][0]) / math.pi * 180
+    return Ellipse(p, width=2 * n * math.sqrt(eig_vals[0]), height=2 * n * math.sqrt(eig_vals[1]), angle=ang, fill=False, color="blue", alpha=0.5)
