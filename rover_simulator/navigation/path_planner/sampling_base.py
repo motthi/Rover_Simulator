@@ -1,9 +1,12 @@
-
+from __future__ import annotations
 import random
 import math
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.patches as patches
+from rover_simulator.navigation.localizer import KalmanFilter
 from rover_simulator.navigation.path_planner import PathPlanner
+from rover_simulator.utils import angle_to_range, sigma_ellipse, GeoEllipse, cov_to_ellipse, ellipse_collision
 
 
 class RRT(PathPlanner):
@@ -98,11 +101,12 @@ class RRT(PathPlanner):
 
         return new_node
 
-    def get_new_node(self):
+    def get_new_node(self) -> Node:
         if random.randint(0, 1) > self.goal_sample_rate:
             rnd = self.Node(
                 random.uniform(self.explore_x_min, self.explore_x_max),
-                random.uniform(self.explore_y_min, self.explore_y_max))
+                random.uniform(self.explore_y_min, self.explore_y_max)
+            )
         else:  # goal point sampling
             rnd = self.Node(self.goal_node.x, self.goal_node.y)
         return rnd
@@ -390,3 +394,216 @@ class RRTstar(RRT):
             if node.parent == parent_node:
                 node.cost = self.calc_new_cost(parent_node, node)
                 self.propagate_cost_to_leaves(node)
+
+
+class ChanceConstrainedRRT(RRT):
+    class Node():
+        def __init__(self, x, y, head, cov) -> None:
+            self.x = x
+            self.y = y
+            self.head = head
+            self.cov = cov
+            self.parent = None
+            self.child = None
+            self.cost_lb = None         # Lower bound cost
+            self.cost_ub = float('inf')  # Upper bound cost
+
+        def set_lower_bound_cost(self, goal_pos) -> None:
+            self.cost_lb = np.linalg.norm(np.array(self.x, self.y) - goal_pos)
+
+        def set_upper_bound_cost(self) -> None:
+            self.cost_ub = 0.0
+
+    def __init__(
+        self,
+        start_pos=None, goal_pos=None, start_cov=None, start_head=None,
+        explore_region=[[0, 20], [0, 20]], known_obstacles=[], enlarge_range=0, expand_distance=3,
+        goal_sample_rate=0.9, path_resolution=0.5,
+        num_nearest_node=10, p_safe: float = 0.99
+    ):
+        if start_pos is not None and goal_pos is not None and start_cov is not None:
+            if start_head is None:
+                start_head = np.arctan2(goal_pos[1] - start_pos[1], goal_pos[0] - start_pos[0])
+            self.start_node = self.Node(start_pos[0], start_pos[1], start_head, start_cov)
+            self.goal_node = self.Node(goal_pos[0], goal_pos[1], None, None)
+        else:
+            self.start_node = None
+            self.goal_node = None
+        self.explore_x_min = explore_region[0][0]
+        self.explore_x_max = explore_region[0][1]
+        self.explore_y_min = explore_region[1][0]
+        self.explore_y_max = explore_region[1][1]
+        self.goal_sample_rate = goal_sample_rate
+        self.expand_dis = expand_distance
+        self.path_resolution = path_resolution
+        self.num_nearest_node = num_nearest_node
+        self.p_safe = p_safe
+
+        self.known_obstacles = known_obstacles
+        self.obstacle_list = [[obstacle.pos[0], obstacle.pos[1], obstacle.r + enlarge_range] for obstacle in known_obstacles]
+        obstacle_positions = [obstacle.pos for obstacle in known_obstacles] if not known_obstacles is None else None
+        # self.obstacle_kdTree = cKDTree(obstacle_positions)
+        self.name = "CC-RRT"
+
+    def calculate_path(self, max_iter=200, *kargs):
+        if self.start_node is None:
+            raise ValueError("start_node is None")
+        if self.goal_node is None:
+            raise ValueError("goal_node is None")
+
+        self.node_list = [self.start_node]
+        import time
+        s_time = time.time()
+        while time.time() - s_time < 5.0:
+            self.expand_tree(max_iter)
+
+        nearest_idxes = self.get_m_nearest_nodes_indexes(self.node_list, self.goal_node)
+        costs = []
+        for idx in nearest_idxes:
+            cost = 0.0
+            node = self.node_list[idx]
+            while node.parent is not None:
+                pnode = node.parent
+                cost += np.linalg.norm([node.x - pnode.x, node.y - pnode.y])
+                node = pnode
+            if pnode.x != self.start_node.x or pnode.y != self.start_node.y:
+                cost = float('inf')
+            costs.append(cost)
+        idx = costs.index(min(costs))
+        node = self.node_list[nearest_idxes[idx]]
+        planned_path = [node]
+        while node.parent is not None:
+            planned_path.append(node.parent)
+            node = node.parent
+        planned_path.reverse()
+        self.planned_path = planned_path
+        return self.planned_path
+
+    def expand_tree(self, max_iter: int):
+        for _ in range(max_iter):
+            trg_node = self.get_new_node()
+            nearest_idxes = self.get_m_nearest_nodes_indexes(self.node_list, trg_node)
+            for idx in nearest_idxes:
+                near_node = self.node_list[idx]
+                new_nodes, flag = self.connect_to_target(near_node, trg_node)
+                for new_node in new_nodes:
+                    self.node_list.append(new_node)
+                    nodes_to_goal: list[self.Node] = []
+                    nodes_to_goal, reached_goal = self.connect_to_target(new_node, self.goal_node)
+                    if reached_goal is True:
+                        ub_cost = 0.0
+                        node = nodes_to_goal.reverse()[-1]
+                        while not node.parent is None:
+                            parent_node = node.parent
+                            ub_cost += np.linalg.norm([parent_node.x - node.x, parent_node.y - node.y])
+                            if ub_cost > node.cost_ub:
+                                self.node_list.pop(-1)  # Must prune portions of the tree
+                                break
+                            node.cost_ub = ub_cost
+                            node = parent_node
+
+    def get_new_node(self) -> Node:
+        if random.random() > self.goal_sample_rate:
+            rnd = self.Node(
+                random.uniform(self.explore_x_min, self.explore_x_max),
+                random.uniform(self.explore_y_min, self.explore_y_max),
+                None, None
+            )
+        else:  # goal point sampling
+            rnd = self.Node(self.goal_node.x, self.goal_node.y, None, None)
+        return rnd
+
+    def connect_to_target(self, node: Node, trg_node: Node) -> list[list[Node], bool]:
+        new_nodes = []
+        x_tk = np.array([node.x, node.y])
+        p_tk = node.cov
+        dist_to_trg = float('inf')
+        itv = 5
+        cnt = 0
+        prev_node = node
+        while self.is_safe(x_tk, p_tk) and dist_to_trg > self.expand_dis:
+            control_inputs = self.select_inputs(node, trg_node)
+            new_node = self.simulate_one_step(node, trg_node, control_inputs)
+            x_tk = np.array([node.x, node.y])
+            p_tk = node.cov
+            dist_to_trg = np.linalg.norm([node.x - trg_node.x, node.y - trg_node.y])
+            if cnt % itv == 0:
+                new_nodes.append(new_node)
+                new_node.parent = prev_node
+                prev_node = new_node
+            node = new_node
+            cnt += 1
+        return new_nodes, dist_to_trg < self.expand_dis
+
+    def get_m_nearest_nodes_indexes(self, node_list: list[Node], rnd_node: Node):
+        dlist = [(node.x - rnd_node.x)**2 + (node.y - rnd_node.y)**2 for node in node_list]
+        dlist_sorted = sorted(dlist)
+        mininds = []
+        for i, d in enumerate(dlist_sorted):
+            if i >= self.num_nearest_node:
+                break
+            mininds.append(dlist.index(d))
+        return mininds
+
+    def is_safe(self, x, cov):
+        e1 = cov_to_ellipse(x[0:2], cov[0:2, 0:2], 3)
+        for obs in self.obstacle_list:
+            e2 = GeoEllipse(obs[0], obs[1], 0.0, np.sqrt(obs[2]), np.sqrt(obs[2]))
+            if ellipse_collision(e1, e2):
+                return False
+        return True
+
+    def select_inputs(self, node, trg_node):
+        L = 1.0
+        v = 1.0
+        theta = np.arctan2(trg_node.y - node.y, trg_node.x - node.x) - node.head
+        theta = angle_to_range(theta)
+        w = 2 * v * np.sin(theta) / L
+        return v, w
+
+    def simulate_one_step(self, from_node, to_node, control_inputs, extend_length=1.0):
+        prev_pose = np.array([from_node.x, from_node.y, from_node.head])
+        kalman_filter = KalmanFilter(prev_pose, from_node.cov)
+        new_pose = kalman_filter.estimate_pose(prev_pose, control_inputs, 0.5)
+        new_node = self.Node(new_pose[0], new_pose[1], new_pose[2], kalman_filter.belief.cov)
+        new_node.parent = from_node
+        return new_node
+
+    def draw(self, figsize=(8, 8), draw_ellipse=True, draw_result_only=False):
+        self.fig = plt.figure(figsize=figsize)
+        ax = self.fig.add_subplot(111)
+        ax.set_aspect('equal')
+        ax.set_xlabel("X [m]", fontsize=10)
+        ax.set_ylabel("Y [m]", fontsize=10)
+
+        # Draw Obstacle Regions
+        for obstacle in self.obstacle_list:
+            obs = patches.Circle(xy=(obstacle[0], obstacle[1]), radius=obstacle[2], fc='black', ec='black')
+            ax.add_patch(obs)
+
+        if draw_result_only is False:
+            for node in self.node_list:
+                node_ = node.parent
+                if node_ is not None:
+                    ax.plot([node.x, node_.x], [node.y, node_.y], color="cyan")
+                ax.scatter([node.x], [node.y], color="b", s=3)
+                if draw_ellipse is True:
+                    p = np.array([node.x, node.y, node.head])
+                    cov = node.cov
+                    e = sigma_ellipse(p[0:2], cov[0:2, 0:2], 3)
+                    ax.add_patch(e)
+            for i in range(len(self.planned_path) - 1):
+                n = self.planned_path[i]
+                n_ = self.planned_path[i + 1]
+                ax.plot([n.x, n_.x], [n.y, n_.y], color="red")
+        else:
+            for i in range(len(self.planned_path) - 1):
+                n = self.planned_path[i]
+                n_ = self.planned_path[i + 1]
+                ax.plot([n.x, n_.x], [n.y, n_.y], color="red")
+                if draw_ellipse is True:
+                    p = np.array([n.x, n.y, n.head])
+                    cov = n.cov
+                    e = sigma_ellipse(p[0:2], cov[0:2, 0:2], 3)
+                    ax.add_patch(e)
+        plt.show()
