@@ -58,7 +58,7 @@ class RRT(PathPlanner):
 
         self.node_list = [self.start_node]
         for _ in range(max_iter):
-            rnd_node = self.get_new_node()
+            rnd_node = self.sample_new_node()
             nearest_ind = self.get_nearest_node_index(self.node_list, rnd_node)
             nearest_node = self.node_list[nearest_ind]
 
@@ -101,7 +101,7 @@ class RRT(PathPlanner):
 
         return new_node
 
-    def get_new_node(self) -> Node:
+    def sample_new_node(self) -> Node:
         if random.randint(0, 1) > self.goal_sample_rate:
             rnd = self.Node(
                 random.uniform(self.explore_x_min, self.explore_x_max),
@@ -227,7 +227,7 @@ class RRTstar(RRT):
         self.node_list = [self.start_node]
         for i in range(max_iter):
             # print("Iter:", i, ", number of nodes:", len(self.node_list))
-            rnd = self.get_new_node()
+            rnd = self.sample_new_node()
             nearest_ind = self.get_nearest_node_index(self.node_list, rnd)
             new_node = self.steer(self.node_list[nearest_ind], rnd, self.expand_dis)
             near_node = self.node_list[nearest_ind]
@@ -398,15 +398,15 @@ class RRTstar(RRT):
 
 class ChanceConstrainedRRT(RRT):
     class Node():
-        def __init__(self, x, y, head, cov) -> None:
+        def __init__(self, x: float, y: float, head: float, cov: np.ndarray) -> None:
             self.x = x
             self.y = y
             self.head = head
             self.cov = cov
             self.parent = None
-            self.child = None
             self.cost_lb = None         # Lower bound cost
             self.cost_ub = float('inf')  # Upper bound cost
+            self.cost_fs = 0.0          # Cost from start
 
         def set_lower_bound_cost(self, goal_pos) -> None:
             self.cost_lb = np.linalg.norm(np.array(self.x, self.y) - goal_pos)
@@ -416,11 +416,11 @@ class ChanceConstrainedRRT(RRT):
 
     def __init__(
         self,
-        start_pos=None, goal_pos=None, start_cov=None, start_head=None,
-        explore_region=[[0, 20], [0, 20]], known_obstacles=[], enlarge_range=0, expand_distance=3,
-        goal_sample_rate=0.9, path_resolution=0.5,
-        num_nearest_node=10, p_safe: float = 0.99
-    ):
+        start_pos: np.ndarray = None, goal_pos: np.ndarray = None, start_cov: np.ndarray = None, start_head: float = None,
+        explore_region: list = [[0, 20], [0, 20]], known_obstacles: list = [], enlarge_range: float = 0, expand_distance: float = 3.0,
+        goal_sample_rate: float = 0.3, path_resolution: float = 0.5,
+        num_nearest_node: int = 10, p_safe: float = 0.99
+    ) -> None:
         if start_pos is not None and goal_pos is not None and start_cov is not None:
             if start_head is None:
                 start_head = np.arctan2(goal_pos[1] - start_pos[1], goal_pos[0] - start_pos[0])
@@ -441,11 +441,11 @@ class ChanceConstrainedRRT(RRT):
 
         self.known_obstacles = known_obstacles
         self.obstacle_list = [[obstacle.pos[0], obstacle.pos[1], obstacle.r + enlarge_range] for obstacle in known_obstacles]
-        obstacle_positions = [obstacle.pos for obstacle in known_obstacles] if not known_obstacles is None else None
+        # obstacle_positions = [obstacle.pos for obstacle in known_obstacles] if not known_obstacles is None else None
         # self.obstacle_kdTree = cKDTree(obstacle_positions)
         self.name = "CC-RRT"
 
-    def calculate_path(self, max_iter=200, *kargs):
+    def calculate_path(self, max_iter: int = 200, *kargs) -> list:
         if self.start_node is None:
             raise ValueError("start_node is None")
         if self.goal_node is None:
@@ -462,6 +462,9 @@ class ChanceConstrainedRRT(RRT):
         for idx in nearest_idxes:
             cost = 0.0
             node = self.node_list[idx]
+            if np.linalg.norm([node.x - self.goal_node.x, node.y - self.goal_node.y]) > self.expand_dis * 3:
+                # ゴールからある程度離れた場合は除外する
+                continue
             while node.parent is not None:
                 pnode = node.parent
                 cost += np.linalg.norm([node.x - pnode.x, node.y - pnode.y])
@@ -479,16 +482,15 @@ class ChanceConstrainedRRT(RRT):
         self.planned_path = planned_path
         return self.planned_path
 
-    def expand_tree(self, max_iter: int):
+    def expand_tree(self, max_iter: int) -> None:
         for _ in range(max_iter):
-            trg_node = self.get_new_node()
-            nearest_idxes = self.get_m_nearest_nodes_indexes(self.node_list, trg_node)
-            for idx in nearest_idxes:
+            trg_node = self.sample_new_node()
+            near_idxes = self.get_m_nearest_nodes_indexes(self.node_list, trg_node)
+            for idx in near_idxes:
                 near_node = self.node_list[idx]
-                new_nodes, flag = self.connect_to_target(near_node, trg_node)
+                new_nodes, _ = self.connect_to_target(near_node, trg_node)
                 for new_node in new_nodes:
                     self.node_list.append(new_node)
-                    nodes_to_goal: list[self.Node] = []
                     nodes_to_goal, reached_goal = self.connect_to_target(new_node, self.goal_node)
                     if reached_goal is True:
                         ub_cost = 0.0
@@ -500,9 +502,10 @@ class ChanceConstrainedRRT(RRT):
                                 self.node_list.pop(-1)  # Must prune portions of the tree
                                 break
                             node.cost_ub = ub_cost
+                            node.cost_fs = parent_node.cost_fs + np.linalg.norm([node.x - parent_node.x, node.y - parent_node.y])
                             node = parent_node
 
-    def get_new_node(self) -> Node:
+    def sample_new_node(self) -> Node:
         if random.random() > self.goal_sample_rate:
             rnd = self.Node(
                 random.uniform(self.explore_x_min, self.explore_x_max),
@@ -518,42 +521,35 @@ class ChanceConstrainedRRT(RRT):
         x_tk = np.array([node.x, node.y])
         p_tk = node.cov
         dist_to_trg = float('inf')
-        itv = 5
-        cnt = 0
         prev_node = node
-        while self.is_safe(x_tk, p_tk) and dist_to_trg > self.expand_dis:
+        while True:
             control_inputs = self.select_inputs(node, trg_node)
-            new_node = self.simulate_one_step(node, trg_node, control_inputs)
-            x_tk = np.array([node.x, node.y])
-            p_tk = node.cov
-            dist_to_trg = np.linalg.norm([node.x - trg_node.x, node.y - trg_node.y])
-            if cnt % itv == 0:
+            new_node = self.simulate_one_step(node, control_inputs)
+            x_tk = np.array([new_node.x, new_node.y])
+            p_tk = new_node.cov
+            dist_to_trg = np.linalg.norm([new_node.x - trg_node.x, new_node.y - trg_node.y])
+            if not self.is_safe(x_tk, p_tk) or dist_to_trg <= self.expand_dis:
+                break
+            if np.linalg.norm([new_node.x - prev_node.x, new_node.y - prev_node.y]) > 1.0:
                 new_nodes.append(new_node)
                 new_node.parent = prev_node
                 prev_node = new_node
             node = new_node
-            cnt += 1
         return new_nodes, dist_to_trg < self.expand_dis
 
-    def get_m_nearest_nodes_indexes(self, node_list: list[Node], rnd_node: Node):
-        dlist = [(node.x - rnd_node.x)**2 + (node.y - rnd_node.y)**2 for node in node_list]
-        dlist_sorted = sorted(dlist)
+    def get_m_nearest_nodes_indexes(self, node_list: list[Node], rnd_node: Node) -> list:
+        dist_costs = [(node.x - rnd_node.x)**2 + (node.y - rnd_node.y)**2 for node in node_list]    # rnd_nodeから各nodeへの距離
+        fs_costs = [node.cost_fs for node in node_list]  # スタート地点から各nodeまでの距離
+        costs = [d + fs for (d, fs) in zip(dist_costs, fs_costs)]
+        costs_sorted = sorted(costs)
         mininds = []
-        for i, d in enumerate(dlist_sorted):
+        for i, d in enumerate(costs_sorted):
             if i >= self.num_nearest_node:
                 break
-            mininds.append(dlist.index(d))
+            mininds.append(costs.index(d))
         return mininds
 
-    def is_safe(self, x, cov):
-        e1 = cov_to_ellipse(x[0:2], cov[0:2, 0:2], 3)
-        for obs in self.obstacle_list:
-            e2 = GeoEllipse(obs[0], obs[1], 0.0, np.sqrt(obs[2]), np.sqrt(obs[2]))
-            if ellipse_collision(e1, e2):
-                return False
-        return True
-
-    def select_inputs(self, node, trg_node):
+    def select_inputs(self, node: Node, trg_node: Node) -> list:
         L = 1.0
         v = 1.0
         theta = np.arctan2(trg_node.y - node.y, trg_node.x - node.x) - node.head
@@ -561,15 +557,24 @@ class ChanceConstrainedRRT(RRT):
         w = 2 * v * np.sin(theta) / L
         return v, w
 
-    def simulate_one_step(self, from_node, to_node, control_inputs, extend_length=1.0):
+    def simulate_one_step(self, from_node: Node, control_inputs: list[float, float]) -> Node:
         prev_pose = np.array([from_node.x, from_node.y, from_node.head])
-        kalman_filter = KalmanFilter(prev_pose, from_node.cov)
-        new_pose = kalman_filter.estimate_pose(prev_pose, control_inputs, 0.5)
-        new_node = self.Node(new_pose[0], new_pose[1], new_pose[2], kalman_filter.belief.cov)
+        kf = KalmanFilter(prev_pose, from_node.cov)
+        new_pose = kf.estimate_pose(prev_pose, control_inputs, 0.5)
+        new_node = self.Node(new_pose[0], new_pose[1], new_pose[2], kf.belief.cov)
+        new_node.cost_fs = from_node.cost_fs + np.linalg.norm([new_node.x - from_node.x, new_node.y - from_node.y])
         new_node.parent = from_node
         return new_node
 
-    def draw(self, figsize=(8, 8), draw_ellipse=True, draw_result_only=False):
+    def is_safe(self, x: np.ndarray, cov: np.ndarray) -> bool:
+        e1 = cov_to_ellipse(x[0:2], cov[0:2, 0:2], 3)
+        for obs in self.obstacle_list:
+            e2 = GeoEllipse(obs[0], obs[1], 0.0, obs[2], obs[2])
+            if ellipse_collision(e1, e2):
+                return False
+        return True
+
+    def draw(self, figsize=(8, 8), draw_ellipse=True, draw_result_only=False) -> None:
         self.fig = plt.figure(figsize=figsize)
         ax = self.fig.add_subplot(111)
         ax.set_aspect('equal')
@@ -582,28 +587,32 @@ class ChanceConstrainedRRT(RRT):
             ax.add_patch(obs)
 
         if draw_result_only is False:
-            for node in self.node_list:
-                node_ = node.parent
-                if node_ is not None:
-                    ax.plot([node.x, node_.x], [node.y, node_.y], color="cyan")
-                ax.scatter([node.x], [node.y], color="b", s=3)
+            # すべての経路候補を表示
+            for n in self.node_list:
+                n_ = n.parent
+                if n_ is not None:
+                    ax.plot([n.x, n_.x], [n.y, n_.y], color="cyan")
+                ax.scatter([n.x], [n.y], color="b", s=3)
                 if draw_ellipse is True:
-                    p = np.array([node.x, node.y, node.head])
-                    cov = node.cov
-                    e = sigma_ellipse(p[0:2], cov[0:2, 0:2], 3)
+                    p = np.array([n.x, n.y, n.head])
+                    if not self.is_safe(p, n.cov):
+                        c = "red"
+                    else:
+                        c = "blue"
+                    e = sigma_ellipse(p[0:2], n.cov[0:2, 0:2], 3, c)
                     ax.add_patch(e)
             for i in range(len(self.planned_path) - 1):
                 n = self.planned_path[i]
                 n_ = self.planned_path[i + 1]
                 ax.plot([n.x, n_.x], [n.y, n_.y], color="red")
         else:
+            # 最終的に得られた経路のみを表示
             for i in range(len(self.planned_path) - 1):
                 n = self.planned_path[i]
                 n_ = self.planned_path[i + 1]
                 ax.plot([n.x, n_.x], [n.y, n_.y], color="red")
                 if draw_ellipse is True:
                     p = np.array([n.x, n.y, n.head])
-                    cov = n.cov
-                    e = sigma_ellipse(p[0:2], cov[0:2, 0:2], 3)
+                    e = sigma_ellipse(p[0:2], n.cov[0:2, 0:2], 3)
                     ax.add_patch(e)
         plt.show()

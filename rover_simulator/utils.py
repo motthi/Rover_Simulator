@@ -118,10 +118,10 @@ def updateP(p, p_):
     return lToP(l)
 
 
-def sigma_ellipse(p, cov, n):
+def sigma_ellipse(p, cov, n, color="blue"):
     eig_vals, eig_vec = np.linalg.eig(cov)
     ang = math.atan2(eig_vec[:, 0][1], eig_vec[:, 0][0]) / math.pi * 180
-    return Ellipse(p, width=2 * n * math.sqrt(eig_vals[0]), height=2 * n * math.sqrt(eig_vals[1]), angle=ang, fill=False, color="blue", alpha=0.5)
+    return Ellipse(p, width=2 * n * math.sqrt(eig_vals[0]), height=2 * n * math.sqrt(eig_vals[1]), angle=ang, fill=False, color=color, alpha=0.5)
 
 class GeoEllipse():
     def __init__(self, x: float, y: float, angle: float, a: float, b: float) -> None:
@@ -133,7 +133,7 @@ class GeoEllipse():
 
 def cov_to_ellipse(x, cov, n):
     eig_vals, eig_vec = np.linalg.eig(cov)
-    ang = math.atan2(eig_vec[:, 0][1], eig_vec[:, 0][0]) / math.pi * 180
+    ang = math.atan2(eig_vec[:, 0][1], eig_vec[:, 0][0])
     return GeoEllipse(x[0], x[1], ang, n * math.sqrt(eig_vals[0]), n * math.sqrt(eig_vals[1]))
 
 
