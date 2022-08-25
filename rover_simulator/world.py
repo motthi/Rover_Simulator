@@ -7,6 +7,7 @@ import matplotlib.patches as patches
 from scipy.spatial import cKDTree
 from typing import List, Tuple
 from rover_simulator.core import*
+from rover_simulator.utils import set_fig_params, draw_obstacles, draw_start, draw_goal
 
 if 'google.colab' in sys.modules:
     from tqdm.notebook import tqdm  # Google Colaboratory
@@ -133,28 +134,15 @@ class World():
         self,
         xlim: List[float], ylim: List[float],
         figsize: Tuple[float, float] = (8, 8),
-        enlarge_obstacle: float = 0.0,
+        start_pos: np.ndarray = None,
+        goal_pos: np.ndarray = None,
+        enlarge_range: float = 0.0,
         draw_waypoints: bool = False,
         draw_sensing_points: bool = True,
         draw_sensing_area: bool = False
     ):
-        self.fig = plt.figure(figsize=figsize)
-        ax = self.fig.add_subplot(111)
-        ax.set_aspect('equal')
-        ax.set_xlim(xlim[0], xlim[1])
-        ax.set_ylim(ylim[0], ylim[1])
-        ax.set_xlabel("X [m]", fontsize=10)
-        ax.set_ylabel("Y [m]", fontsize=10)
-
-        # Draw Enlarged Obstacle Regions
-        for obstacle in self.obstacles:
-            enl_obs = patches.Circle(xy=(obstacle.pos[0], obstacle.pos[1]), radius=obstacle.r + enlarge_obstacle, fc='gray', ec='gray')
-            ax.add_patch(enl_obs)
-
-        # Draw Obstacles
-        for obstacle in self.obstacles:
-            obs = patches.Circle(xy=(obstacle.pos[0], obstacle.pos[1]), radius=obstacle.r, fc='black', ec='black')
-            ax.add_patch(obs)
+        self.fig, ax = set_fig_params(figsize, xlim, ylim)
+        draw_obstacles(ax, self.obstacles, enlarge_range)
 
         for rover in self.rovers:
             if rover.history is not None:
@@ -206,6 +194,11 @@ class World():
                         linestyle="-",
                         color=rover.waypoint_color
                     )
+
+        if start_pos is not None:
+            draw_start(ax, start_pos)
+        if goal_pos is not None:
+            draw_goal(ax, goal_pos)
 
     def animate(
         self,

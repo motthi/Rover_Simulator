@@ -77,16 +77,13 @@ def matQ(distance_dev, direction_dev):
 class KalmanFilter:
     def __init__(
         self,
-        init_pose, init_cov=None, motion_noise_stds={"nn": 0.1, "no": 0.0001, "on": 0.013, "oo": 0.02},
-        distance_dev_rate=0.14, direction_dev=0.05
+        init_pose, init_cov=None, motion_noise_stds={"nn": 0.1, "no": 0.0001, "on": 0.013, "oo": 0.02}
     ):
         if init_cov is None:
             init_cov = np.diag([1e-10, 1e-10, 1e-10])
         self.belief = multivariate_normal(mean=init_pose, cov=init_cov)
         self.pose = self.belief.mean
         self.motion_noise_stds = motion_noise_stds
-        self.distance_dev_rate = distance_dev_rate
-        self.direction_dev = direction_dev
 
     def estimate_pose(self, previous_pose: np.ndarray, control_inputs: np.ndarray, dt: float):
         nu, omega = control_inputs

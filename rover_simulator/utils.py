@@ -1,5 +1,6 @@
 import math
 import numpy as np
+import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from typing import List
 from matplotlib.colors import LinearSegmentedColormap
@@ -121,7 +122,8 @@ def updateP(p, p_):
 def sigma_ellipse(p, cov, n, color="blue"):
     eig_vals, eig_vec = np.linalg.eig(cov)
     ang = math.atan2(eig_vec[:, 0][1], eig_vec[:, 0][0]) / math.pi * 180
-    return Ellipse(p, width=2 * n * math.sqrt(eig_vals[0]), height=2 * n * math.sqrt(eig_vals[1]), angle=ang, fill=False, color=color, alpha=0.5)
+    return Ellipse(p, width=2 * n * math.sqrt(eig_vals[0]), height=2 * n * math.sqrt(eig_vals[1]), angle=ang, fill=False, color=color, alpha=0.5, zorder=5)
+
 
 class GeoEllipse():
     def __init__(self, x: float, y: float, angle: float, a: float, b: float) -> None:
@@ -130,6 +132,7 @@ class GeoEllipse():
         self.ang = angle
         self.x = x
         self.y = y
+
 
 def cov_to_ellipse(x, cov, n):
     eig_vals, eig_vec = np.linalg.eig(cov)
@@ -181,3 +184,31 @@ def ellipse_collision(e1: GeoEllipse, e2: GeoEllipse) -> bool:
     if judge_val <= 1:
         return True  # Collision
     return False
+
+
+def set_fig_params(figsize, xlim, ylim):
+    fig = plt.figure(figsize=figsize)
+    ax = fig.add_subplot(111)
+    ax.set_aspect('equal')
+    ax.set_xlim(xlim[0], xlim[1])
+    ax.set_ylim(ylim[0], ylim[1])
+    ax.set_xlabel("X [m]", fontsize=10)
+    ax.set_ylabel("Y [m]", fontsize=10)
+    return fig, ax
+
+
+def draw_obstacles(ax, obstacles, enlarge_range):
+    for obstacle in obstacles:
+        enl_obs = patches.Circle(xy=(obstacle.pos[0], obstacle.pos[1]), radius=obstacle.r + enlarge_range, fc='black', ec='black', zorder=-1.0)
+        ax.add_patch(enl_obs)
+    for obstacle in obstacles:
+        obs = patches.Circle(xy=(obstacle.pos[0], obstacle.pos[1]), radius=obstacle.r, fc='black', ec='black', zorder=-1.0)
+        ax.add_patch(obs)
+
+
+def draw_start(ax, start_pos: np.ndarray) -> None:
+    ax.plot(start_pos[0], start_pos[1], "or")
+
+
+def draw_goal(ax, goal_pos: np.ndarray) -> None:
+    ax.plot(goal_pos[0], goal_pos[1], "xr")
