@@ -1,7 +1,7 @@
 import math
 import numpy as np
 from scipy.stats import norm
-from rover_simulator.utils import state_transition
+from rover_simulator.utils.motion import state_transition, covariance_transition
 from rover_simulator.core import Localizer
 from scipy.stats import multivariate_normal
 
@@ -89,11 +89,8 @@ class KalmanFilter:
         nu, omega = control_inputs
         if abs(omega) < 1e-5:
             omega = 1e-5  # 値が0になるとゼロ割りになって計算ができないのでわずかに値を持たせる
-
-        M = matM(nu, omega, dt, self.motion_noise_stds)
-        A = matA(nu, omega, dt, self.belief.mean[2])
-        F = matF(nu, omega, dt, self.belief.mean[2])
-        self.belief.cov = F.dot(self.belief.cov).dot(F.T) + A.dot(M).dot(A.T)
+        control_inputs = [nu, omega]
+        self.belief.cov = covariance_transition(previous_pose, self.belief.cov, self.motion_noise_stds, control_inputs, dt)
         self.belief.mean = state_transition(previous_pose, control_inputs, dt)
         self.pose = self.belief.mean
         return self.pose

@@ -1,3 +1,4 @@
+from __future__ import annotations
 import sys
 import math
 import copy
@@ -5,9 +6,8 @@ import numpy as np
 import matplotlib.animation as anm
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
-from typing import List, Tuple
 from rover_simulator.core import Obstacle
-from rover_simulator.utils import sigma_ellipse
+from rover_simulator.utils.draw import sigma_ellipse
 
 if 'google.colab' in sys.modules:
     from tqdm.notebook import tqdm  # Google Colaboratory
@@ -49,9 +49,9 @@ class History():
 
     def plot(
         self,
-        xlim: List[float], ylim: List[float],
-        figsize: Tuple[float, float] = (8, 8),
-        obstacles: List[Obstacle] = [],
+        xlim: list[float], ylim: list[float],
+        figsize: tuple[float, float] = (8, 8),
+        obstacles: list[Obstacle] = [],
         enlarge_obstacle: float = 0.0,
         draw_waypoints: bool = False,
         draw_sensing_points: bool = True,
@@ -138,10 +138,10 @@ class History():
 
     def animate(
         self,
-        xlim: List[float], ylim: List[float],
+        xlim: list[float], ylim: list[float],
         start_step: int = 0, end_step: int = None,
-        figsize: Tuple[float, float] = (8, 8),
-        obstacles: List[Obstacle] = [],
+        figsize: tuple[float, float] = (8, 8),
+        obstacles: list[Obstacle] = [],
         enlarge_obstacle: float = 0.0,
         save_path: str = None,
         debug: bool = False
@@ -281,9 +281,9 @@ class HistoryWithKalmanFilter(History):
 
     def plot(
         self,
-        xlim: List[float], ylim: List[float],
-        figsize: Tuple[float, float] = (8, 8),
-        obstacles: List[Obstacle] = [],
+        xlim: list[float], ylim: list[float],
+        figsize: tuple[float, float] = (8, 8),
+        obstacles: list[Obstacle] = [],
         enlarge_obstacle: float = 0.0,
         draw_waypoints: bool = False,
         draw_sensing_points: bool = True,

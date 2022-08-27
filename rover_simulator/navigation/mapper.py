@@ -1,11 +1,11 @@
+from __future__ import annotations
 import cv2
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
-from typing import Dict, List
 from scipy.spatial import cKDTree
 from rover_simulator.core import Mapper, Sensor, Obstacle
-from rover_simulator.utils import isInRange, angle_to_range, isInList, round_off
+from rover_simulator.utils.utils import isInRange, angle_to_range, isInList, round_off
 
 
 class GridMapper(Mapper):
@@ -44,7 +44,7 @@ class GridMapper(Mapper):
         self.obstacle_kdTree = None
         self.observed_grids = []
 
-    def update(self, rover_estimated_pose: np.ndarray, sensed_obstacles: List[Dict]) -> None:
+    def update(self, rover_estimated_pose: np.ndarray, sensed_obstacles: list[dict]) -> None:
         # Initailize occupancy of grid in sensing range to 0
         rover_idx = self.poseToIndex(rover_estimated_pose)
         sensed_grids = []
@@ -63,7 +63,7 @@ class GridMapper(Mapper):
                     if self.map[u[0]][u[1]] <= 0.5:
                         self.map[u[0]][u[1]] = 0.01
 
-        # List up new obstacles
+        # list up new obstacles
         new_obstacles = []
         for sensed_obstacle in sensed_obstacles:
             distance = sensed_obstacle['distance']
@@ -72,7 +72,7 @@ class GridMapper(Mapper):
             obstacle_pos = rover_estimated_pose[0:2] + np.array([distance * np.cos(angle), distance * np.sin(angle)])
             new_obstacles.append([obstacle_pos, radius])
 
-        # List up deleted obstacles in sensing range
+        # list up deleted obstacles in sensing range
         deleted_obstacles = []
         if self.obstacle_kdTree is not None:
             idxes = self.obstacle_kdTree.query_ball_point(rover_estimated_pose[0:2], r=self.sensor.range)
@@ -91,13 +91,13 @@ class GridMapper(Mapper):
             _ = self.update_circle(self.obstacles_table[idx].pos, (self.obstacles_table[idx].r + self.rover_r) * self.expand_rate, 0.01)
             self.obstacles_table.pop(idx)
 
-        # List up all obstacles
+        # list up all obstacles
         updated_grids = []
         for pos, radius in new_obstacles:
             updated_grids += self.update_circle(pos, (radius + self.rover_r) * self.expand_rate, 0.99)
             self.obstacles_table.append(Obstacle(pos, radius))
 
-        # List up observed grids
+        # list up observed grids
         self.observed_grids = []
         for u in sensed_grids:
             if self.map[u[0]][u[1]] > 0.5:
@@ -155,9 +155,9 @@ class GridMapper(Mapper):
 
     def draw_map(
         self,
-        xlim: List[float], ylim: List[float],
+        xlim: list[float], ylim: list[float],
         figsize=(8, 8),
-        obstacles: List[Obstacle] = [],
+        obstacles: list[Obstacle] = [],
         enlarge_obstacle: float = 0.0,
         map_name='map'
     ) -> None:
@@ -225,8 +225,8 @@ class TableMapper(Mapper):
         self.obstacles_table = []
         self.obstacle_kdTree = None
 
-    def update(self, rover_estimated_pose: np.ndarray, sensed_obstacles: List[Dict]) -> None:
-        # List up obstacles in sensing range
+    def update(self, rover_estimated_pose: np.ndarray, sensed_obstacles: list[dict]) -> None:
+        # list up obstacles in sensing range
         obstacle_in_sense_idxes = []
         if self.obstacle_kdTree is not None:
             idxes = self.obstacle_kdTree.query_ball_point(rover_estimated_pose[0:2], r=self.sensor.range)
@@ -241,7 +241,7 @@ class TableMapper(Mapper):
                 if isInRange(angle, -self.sensor.fov / 2, self.sensor.fov / 2):
                     obstacle_in_sense_idxes.append(idx)
 
-        # List up obstales which is out of retain_range
+        # list up obstales which is out of retain_range
         obstacle_outofrange_idxes = []
         if self.obstacle_kdTree is not None:
             idxes = self.obstacle_kdTree.query_ball_point(rover_estimated_pose[0:2], r=self.retain_range)
@@ -266,7 +266,7 @@ class TableMapper(Mapper):
         else:
             self.obstacle_kdTree = None
 
-    def draw_map(self, xlim: List[float], ylim: List[float], figsize=(8, 8)) -> None:
+    def draw_map(self, xlim: list[float], ylim: list[float], figsize=(8, 8)) -> None:
         self.fig = plt.figure(figsize=figsize)
         ax = self.fig.add_subplot(111)
         ax.set_aspect('equal')

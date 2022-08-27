@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from typing import List, Tuple
 from rover_simulator.core import Mapper, Obstacle
+from rover_simulator.navigation.mapper import GridMapper
 from rover_simulator.navigation.path_planner import PathPlanner, PathNotFoundError
 from rover_simulator.utils import environment_cmap, round_off
 
@@ -763,3 +764,370 @@ class DstarLite(GridBasePathPlanning):
             return True
         else:
             return False
+
+
+class FieldDstar(GridBasePathPlanning):
+    def __init__(
+        self,
+        start_pos: np.ndarray = None, goal_pos: np.ndarray = None,
+        mapper: GridMapper = None,
+        heristics: float = 0.5
+    ) -> None:
+        super().__init__()
+        self.grid_width = mapper.grid_width
+        self.grid_num = np.array(mapper.map.shape)
+        self.start_idx = self.poseToIndex(start_pos) if start_pos is not None else None
+        self.current_idx = self.start_idx if start_pos is not None else None
+        self.goal_idx = self.poseToIndex(goal_pos) if goal_pos is not None else None
+        self.heuristics = heristics
+
+        self.opened_map = np.full(mapper.map.shape, 0, dtype=int)   # Map express wheter it is OPEN ot not
+        self.key_map = np.full(np.append(np.array(mapper.map.shape), 2), np.array([float('inf'), float('inf')]))
+        self.g_map = np.full(mapper.map.shape, 0, dtype=float)
+        self.rhs_map = np.full(mapper.map.shape, 0, dtype=float)
+        self.bptr_map = np.full(np.append(np.array(mapper.map.shape), 2), np.array([0, 0]))
+        self.visted_map = np.full(mapper.map.shape, 0.0, dtype=int)
+        self.metric_grid_map = np.full(mapper.map.shape, -1.0, dtype=np.float)  # Metric Map shows wheter the grid is observed, -1: Unobserved, 0: Free, 1: Obstacles
+
+        self.g_map[self.start_idx[0]][self.start_idx[1]] = float('inf')
+        self.rhs_map[self.start_idx[0]][self.start_idx[1]] = float('inf')
+        self.g_map[self.goal_idx[0]][self.goal_idx[1]] = float('inf')
+        self.rhs_map[self.goal_idx[0]][self.goal_idx[1]] = 0.0
+        self.setOpen(self.goal_idx)
+
+        # if mapper is not None:
+        #     self.local_grid_map = np.full(mapper.map.shape, 0.5, dtype=float)  # Local Map is Obstacle Occupancy Grid Map
+        #     self.metric_grid_map = np.full(self.grid_cost_num, -1.0, dtype=np.float)  # Metric Map shows wheter the grid is observed, -1: Unobserved, 0: Free, 1: Obstacles
+        #     self.is_in_U_map = np.full(mapper.mapshape, 0, dtype=np.int16)
+
+        self.pathToTake = []
+        self.takenPath = []
+
+        self.newObstacles = []
+        self.name = "FieldDstar"
+
+    def computeShortestPath(self):
+        while not self.kCompare(self.minValOfOpened(), self.key(self.start_idx)) or self.rhs(self.start_idx) != self.g(self.start_idx):
+            s = self.minIdxOfOpened()
+            if s is None:
+                print("Cannot find the path")
+                break
+            if self.g(s) > self.rhs(s):
+                self.g_map[s[0]][s[1]] = self.rhs(s)
+                self.unsetOpen(s)
+                for s_ in self.neigborGrids(s):
+                    if not self.hasVisited(s_):
+                        self.g_map[s_[0]][s_[1]] = float('inf')
+                        self.rhs_map[s_[0]][s_[1]] = float('inf')
+                        self.visted_map[s_[0]][s_[1]] = 1
+                    rhs_old = self.rhs(s_)
+                    if self.rhs(s_) > self.computeCost(s_, s, self.ccknbr(s_, s)):
+                        self.rhs_map[s_[0]][s_[1]] = self.computeCost(s_, s, self.ccknbr(s_, s))
+                        self.bptr_map[s_[0]][s_[1]] = s
+                    if self.rhs(s_) > self.computeCost(s_, s, self.cknbr(s_, s)):
+                        self.rhs_map[s_[0]][s_[1]] = self.computeCost(s_, s, self.cknbr(s_, s))
+                        self.bptr_map[s_[0]][s_[1]] = self.cknbr(s_, s)
+                    if not math.isclose(self.rhs(s), rhs_old):
+                        self.updateState(s_)
+            else:
+                self.rhs_map[s[0]][s[1]] = self.minCostInNeigbor(s)
+                self.bptr_map[s[0]][s[1]] = self.minIdxInNeigbor(s)
+                if self.g(s) < self.rhs(s):
+                    self.g_map[s[0]][s[1]] = float('inf')
+                    for s_ in self.neigborGrids(s):
+                        if np.all(self.bptr(s_) == s) or np.all(self.bptr(s_) == self.cknbr(s_, s)):
+                            if not math.isclose(self.rhs(s_), self.computeCost(s_, self.bptr(s_), self.ccknbr(s_, self.bptr(s_)))):
+                                if self.g(s_) < self.rhs(s_) or not self.isOpen(s_):
+                                    self.rhs_map[s_[0]][s_[1]] = float('inf')
+                                    self.updateState(s_)
+                                else:
+                                    self.rhs_map[s_[0]][s_[1]] = self.minCostInNeigbor(s_)
+                                    self.bptr_map[s_[0]][s_[1]] = self.minIdxInNeigbor(s_)
+                                    self.updateState(s_)
+                        self.visted_map[s_[0]][s_[1]] = 1
+                self.updateState(s)
+
+    def updateCellCost(self, x, c):
+        if c > x:
+            for s in self.corners(x):
+                if self.isCorner(self.bptr(s)) or self.isCorner(self.ccknbr(s)):
+                    if not math.isclose(self.rhs(s), self.computeCost(s, self.bptr(s), self.ccknbr(s, self.bptr(s)))):
+                        if self.g(s) < self.rhs(s) or self.isOpen(s):
+                            self.rhs_map[s[0]][s[1]] = float('inf')
+                            self.updateState(s)
+                        else:
+                            self.rhs_map[s[0]][s[1]] = self.minCostInNeigbor(s)
+                            self.bptr_map[s[0]][s[1]] = self.minIdxInNeigbor(s)
+                            self.updateState(s)
+        else:
+            rhs_min = float('inf')
+            for s in self.corners(x):
+                if not self.hasVisited(s):
+                    self.g_map[s[0]][s[1]] = float('inf')
+                    self.rhs_map[s[0]][s[1]] = float('inf')
+                    self.visted_map[s[0]][s[1]] = 1
+                elif self.rhs(s) < rhs_min:
+                    rhs_min = self.rhs(s)
+                    s_star = s
+            if not math.isclose(rhs_min, float('inf')):
+                self.setOpen(s_star)
+
+    def updateState(self, s):
+        if self.g(s) != self.rhs(s):
+            self.setOpen(s)
+        elif(self.isOpen(s)):
+            self.unsetOpen(s)
+
+    def computeCost(self, s, sa, sb):
+        if self.isDiagonalNeigbor(s, sa):
+            s1 = sb
+            s2 = sa
+        else:
+            s1 = sa
+            s2 = sb
+        c_ = self.c(s, s2)
+        b_ = self.c(s, s1)
+        if min(c_, b_) == float('inf'):
+            vs = float('inf')
+        elif self.g(s1) <= self.g(s2):
+            vs = min(c_, b_) + self.g(s1)
+        else:
+            f = self.g(s1) - self.g(s2)
+            if f <= b_:
+                if c_ <= f:
+                    vs = c_ * np.sqrt(2.0) + self.g(s2)
+                else:
+                    y = min(f / np.sqrt(c_**2.0 - f**2.0), 1.0)
+                    vs = c_ * np.sqrt(1.0 + y**2.0) + f * (1.0 - y) + self.g(s2)
+            else:
+                if c_ <= b_:
+                    vs = c_ * np.sqrt(2.0) + self.g(s2)
+                else:
+                    x = 1.0 - min(b_ / np.sqrt(c_**2 - b_**2), 1.0)
+                    vs = c_ * np.sqrt(1.0 + (1.0 - x)**2) + b_ * x + self.g(s2)
+        return vs
+
+    def isDiagonalNeigbor(self, s, s_):
+        ds = s_ - s
+        if np.all(np.abs(ds) == np.array([1, 1])):
+            return True
+        else:
+            False
+
+    def cknbr(self, s: np.ndarray, s_: np.ndarray) -> np.ndarray:
+        ds = s - s_
+        if np.all(ds == np.array([1, 0])):  # 右
+            return s + np.array([1, -1])
+        elif np.all(ds == np.array([1, 1])):  # 右上
+            return s + np.array([1, 0])
+        elif np.all(ds == np.array([0, 1])):  # 上
+            return s + np.array([1, 1])
+        elif np.all(ds == np.array([-1, 1])):  # 左上
+            return s + np.array([0, 1])
+        elif np.all(ds == np.array([-1, 0])):  # 左
+            return s + np.array([-1, 1])
+        elif np.all(ds == np.array([-1, -1])):  # 左下
+            return s + np.array([-1, 0])
+        elif np.all(ds == np.array([0, -1])):  # 下
+            return s + np.array([-1, -1])
+        elif np.all(ds == np.array([1, -1])):  # 右下
+            return s + np.array([0, -1])
+
+    def ccknbr(self, s: np.ndarray, s_: np.ndarray) -> np.ndarray:
+        ds = s - s_
+        if np.all(ds == np.array([1, 0])):  # 右
+            return s + np.array([1, 1])
+        elif np.all(ds == np.array([1, 1])):  # 右上
+            return s + np.array([0, 1])
+        elif np.all(ds == np.array([0, 1])):  # 上
+            return s + np.array([-1, 1])
+        elif np.all(ds == np.array([-1, 1])):  # 左上
+            return s + np.array([-1, 0])
+        elif np.all(ds == np.array([-1, 0])):  # 左
+            return s + np.array([-1, -1])
+        elif np.all(ds == np.array([-1, -1])):  # 左下
+            return s + np.array([0, -1])
+        elif np.all(ds == np.array([0, -1])):  # 下
+            return s + np.array([1, -1])
+        elif np.all(ds == np.array([1, -1])):  # 右下
+            return s + np.array([1, 0])
+
+    def key(self, s: np.ndarray) -> list:
+        return [min(self.g(s), self.rhs(s)) + self.h(self.start_idx, s), min(self.g(s), self.rhs(s))]
+
+    def kCompare(self, k1, k2):
+        if k1[0] > k2[0]:
+            return True
+        elif math.isclose(k1[0], k2[0]):
+            if k1[1] > k2[1] and not math.isclose(k1[1], k2[1]):
+                return True
+        return False
+
+    def rhs(self, s):
+        return self.rhs_map[s[0]][s[1]]
+
+    def g(self, s):
+        return self.g_map[s[0]][s[1]]
+
+    def h(self, s1, s2):
+        return np.round(self.heuristics * np.linalg.norm(s1 - s2), decimals=2)
+
+    def c(self, u, v):
+        if self.isOutOfBounds(u) or self.isObservedObstacle(u) or self.isOutOfBounds(v) or self.isObservedObstacle(v):
+            return float('inf')
+        else:
+            if np.all(np.abs(u - v) == [1, 1]):
+                c_ = 1.41
+                if np.all(v - u == [1, 1]):
+                    if self.metric_grid_map[u[0] + 1][u[1]] == 1 or self.metric_grid_map[u[0]][u[1] + 1] == 1:
+                        c_ = float('inf')
+                elif np.all(v - u == [1, -1]):
+                    if self.metric_grid_map[u[0] + 1][u[1]] == 1 or self.metric_grid_map[u[0]][u[1] - 1] == 1:
+                        c_ = float('inf')
+                elif np.all(v - u == [-1, 1]):
+                    if self.metric_grid_map[u[0] - 1][u[1]] == 1 or self.metric_grid_map[u[0]][u[1] + 1] == 1:
+                        c_ = float('inf')
+                elif np.all(v - u == [-1, -1]):
+                    if self.metric_grid_map[u[0] - 1][u[1]] == 1 or self.metric_grid_map[u[0]][u[1] - 1] == 1:
+                        c_ = float('inf')
+            else:
+                c_ = 1.0
+            return c_
+
+    def bptr(self, s: np.ndarray) -> np.ndarray:
+        return self.bptr_map[s[0]][s[1]]
+
+    def minIdxInNeigbor(self, s: np.ndarray) -> np.ndarray:
+        min_cost = float('inf')
+        min_idx = np.array([0, 0])
+        for s_ in self.neigborGrids(s):
+            cost = self.computeCost(s, s_, self.ccknbr(s, s_))
+            if min_cost > cost:
+                min_cost = cost
+                min_idx = s_
+        return min_idx
+
+    def minCostInNeigbor(self, s: np.ndarray) -> float:
+        min_cost = float('inf')
+        for s_ in self.neigborGrids():
+            cost = self.computeCost(s, s_, self.ccknbr(s, s_))
+            if min_cost > cost:
+                min_cost = cost
+        return cost
+
+    def minIdxOfOpened(self):
+        x_idxes, y_idxes = np.where(self.opened_map == 1)
+        min_idx = None
+        key_val = [float('inf'), float('inf')]
+        for x_idx, y_idx in zip(x_idxes, y_idxes):
+            val = self.key(np.array([x_idx, y_idx]))
+            if key_val[0] > val[0]:
+                key_val = val
+                min_idx = np.array([x_idx, y_idx])
+        return min_idx
+
+    def minValOfOpened(self):
+        x_idxes, y_idxes = np.where(self.opened_map == 1)
+        key_val = [float('inf'), float('inf')]
+        for x_idx, y_idx in zip(x_idxes, y_idxes):
+            val = self.key_map[x_idx][y_idx]
+            if key_val[0] > val[0]:
+                key_val = val
+        return key_val
+
+    def setOpen(self, s):
+        self.opened_map[s[0]][s[1]] = 1
+        k = self.key(s)
+        self.key_map[s[0]][s[1]][0] = k[0]
+        self.key_map[s[0]][s[1]][1] = k[1]
+
+    def unsetOpen(self, s):
+        self.opened_map[s[0]][s[1]] = 0
+        self.key_map[s[0]][s[1]][0] = float('inf')
+        self.key_map[s[0]][s[1]][1] = float('inf')
+
+    def isOpen(self, s):
+        if self.opened_map[s[0]][s[1]] == 1:
+            return True
+        else:
+            return False
+
+    def hasVisited(self, s):
+        if self.visted_map[s[0]][s[1]] == 0.0:
+            return False
+        else:
+            return True
+
+    def corners(self, x):
+        return [x, x + np.array([1, 0]), x + np.array([1, 1]), x + np.array([0, 1])]
+
+    def isCorner(self, s, x):
+        if np.all(s == x) or np.all(s == np.array([1, 0])) or np.all(s == np.array([1, 1])) or np.all(s == np.array([0, 1])):
+            return True
+        else:
+            return False
+
+    def isObservedObstacle(self, idx):
+        if self.metric_grid_map[idx[0]][idx[1]] > 0.5:
+            return True
+        else:
+            return False
+
+    def draw_map(
+        self,
+        xlim: List[float], ylim: List[float],
+        figsize: Tuple[float, float] = (8, 8),
+        map_name: str = 'cost',
+        obstacles: List[Obstacle] = [],
+        enlarge_obstacle: float = 0.0,
+    ):
+        self.fig = plt.figure(figsize=figsize)
+        ax = self.fig.add_subplot(111)
+        ax.set_aspect('equal')
+        ax.set_xlim(xlim[0], xlim[1])
+        ax.set_ylim(ylim[0], ylim[1])
+        ax.set_xlabel("X [m]", fontsize=10)
+        ax.set_ylabel("Y [m]", fontsize=10)
+
+        if map_name == 'cost':
+            draw_map = self.g_map
+        elif map_name == 'metric':
+            draw_map = self.metric_grid_map
+        elif map_name == 'local':
+            draw_map = self.local_grid_map
+
+        # Draw Obstacles
+        for obstacle in obstacles:
+            enl_obs = patches.Circle(xy=(obstacle.pos[0], obstacle.pos[1]), radius=obstacle.r + enlarge_obstacle, fc='gray', ec='gray', zorder=-1.0)
+            ax.add_patch(enl_obs)
+        for obstacle in obstacles:
+            obs = patches.Circle(xy=(obstacle.pos[0], obstacle.pos[1]), radius=obstacle.r, fc='black', ec='black', zorder=-1.0)
+            ax.add_patch(obs)
+
+        # Draw Map
+        if map_name == 'cost':
+            cmap = 'plasma'
+            vmin = None
+            vmax = None
+        elif map_name == 'metric':
+            cmap = environment_cmap
+            vmin = -1.0
+            vmax = 1.0
+        elif map_name == 'local':
+            cmap = 'Greys'
+            vmin = 0.0
+            vmax = 1.0
+        im = ax.imshow(
+            cv2.rotate(draw_map, cv2.ROTATE_90_COUNTERCLOCKWISE),
+            cmap=cmap,
+            vmin=vmin,
+            vmax=vmax,
+            alpha=0.5,
+            extent=(
+                -self.grid_width / 2,
+                self.grid_width * self.grid_num[0] - self.grid_width / 2,
+                -self.grid_width / 2, self.grid_width * self.grid_num[1] - self.grid_width / 2
+            ),
+            zorder=1.0
+        )
+        plt.colorbar(im)

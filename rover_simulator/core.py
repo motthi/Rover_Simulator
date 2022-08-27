@@ -1,4 +1,4 @@
-from typing import Dict, List, Tuple
+from __future__ import annotations
 import numpy as np
 
 
@@ -22,7 +22,7 @@ class Sensor():
     def __init__(self) -> None:
         pass
 
-    def sense(self) -> List[Dict]:
+    def sense(self) -> list[dict]:
         raise NotImplementedError
 
 
@@ -30,7 +30,7 @@ class Controller():
     def __init__(self) -> None:
         pass
 
-    def calculate_control_inputs(self) -> Tuple[float, float]:
+    def calculate_control_inputs(self) -> tuple[float, float]:
         raise NotImplementedError()
 
 

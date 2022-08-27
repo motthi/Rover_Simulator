@@ -3,7 +3,8 @@ import numpy as np
 from typing import List
 from scipy.spatial import cKDTree
 from rover_simulator.core import Controller, Obstacle
-from rover_simulator.utils import angle_to_range, state_transition
+from rover_simulator.utils.utils import angle_to_range
+from rover_simulator.utils.motion import state_transition
 
 
 class ConstantSpeedController(Controller):

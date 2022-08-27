@@ -1,4 +1,5 @@
 
+from __future__ import annotations
 import sys
 import cv2
 import copy
@@ -6,9 +7,9 @@ import numpy as np
 import matplotlib.animation as anm
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
-from typing import List, Tuple
 from rover_simulator.core import*
-from rover_simulator.utils import state_transition, environment_cmap
+from rover_simulator.utils.draw import environment_cmap, set_fig_params
+from rover_simulator.utils.motion import state_transition
 from rover_simulator.core import Obstacle, SensingPlanner
 from rover_simulator.world import World
 from rover_simulator.history import History, HistoryWithKalmanFilter
@@ -304,22 +305,16 @@ class RoverAnimation():
 
     def animate(
         self,
-        xlim: List[float], ylim: List[float],
+        xlim: list[float], ylim: list[float],
         start_step: int = 0, end_step: int = None,
-        figsize: Tuple[float, float] = (8, 8),
+        figsize: tuple[float, float] = (8, 8),
         map_name='cost',
         enlarge_obstacle: float = 0.0,
         save_path: str = None,
         debug: bool = False
     ) -> None:
         end_step = self.world.step if end_step is None else end_step
-        fig = plt.figure(figsize=figsize)
-        ax = fig.add_subplot(111)
-        ax.set_aspect('equal')
-        ax.set_xlim(xlim[0], xlim[1])
-        ax.set_ylim(ylim[0], ylim[1])
-        ax.set_xlabel("X [m]", fontsize=10)
-        ax.set_ylabel("Y [m]", fontsize=10)
+        fig, ax = set_fig_params(figsize=figsize)
         self.xlim = xlim
         self.ylim = ylim
 

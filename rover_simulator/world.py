@@ -7,7 +7,7 @@ import matplotlib.patches as patches
 from scipy.spatial import cKDTree
 from typing import List, Tuple
 from rover_simulator.core import*
-from rover_simulator.utils import set_fig_params, draw_obstacles, draw_start, draw_goal
+from rover_simulator.utils.draw import set_fig_params, draw_obstacles, draw_start, draw_goal
 
 if 'google.colab' in sys.modules:
     from tqdm.notebook import tqdm  # Google Colaboratory

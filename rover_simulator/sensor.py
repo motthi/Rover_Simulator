@@ -1,9 +1,8 @@
-
+from __future__ import annotations
 import numpy as np
-from typing import Dict, List
 from scipy.spatial import cKDTree
 from rover_simulator.core import Obstacle, Sensor, Rover
-from rover_simulator.utils import angle_to_range, isInRange
+from rover_simulator.utils.utils import angle_to_range, isInRange
 
 
 class ImaginalSensor(Sensor):
@@ -14,7 +13,7 @@ class ImaginalSensor(Sensor):
         obstacle_positions = [obstacle.pos for obstacle in self.obstacles] if not obstacles is None else None
         self.obstacle_kdTree = cKDTree(obstacle_positions) if not obstacle_positions is None else None
 
-    def sense(self, rover: Rover) -> List[Dict]:
+    def sense(self, rover: Rover) -> list[dict]:
         sensed_obstacles = []
         if self.obstacle_kdTree is None:
             return sensed_obstacles
@@ -47,7 +46,7 @@ class NoisySensor(ImaginalSensor):
         self.angle_noise = [angle_noise_std, angle_noise_rate]
         self.radius_noise = [radius_noise_std, radius_noise_rate]
 
-    def sense(self, rover: Rover) -> List[Dict]:
+    def sense(self, rover: Rover) -> list[dict]:
         obstacles = super().sense(rover)
         sensed_obstacles = []
         for obstacle in obstacles:

@@ -1,6 +1,6 @@
 import numpy as np
 from rover_simulator.core import SensingPlanner
-from rover_simulator.utils import angle_to_range, isInRange
+from rover_simulator.utils.utils import angle_to_range, isInRange
 
 
 class SimpleSensingPlanner(SensingPlanner):
