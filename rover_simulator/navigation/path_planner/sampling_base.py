@@ -33,6 +33,8 @@ class RRT(PathPlanner):
         cost_func: function = None
     ):
         super().__init__()
+        self.start_pos = start_pos
+        self.goal_pos = goal_pos
         self.start_node = self.Node(start_pos[0], start_pos[1]) if start_pos is not None else None
         self.goal_node = self.Node(goal_pos[0], goal_pos[1]) if goal_pos is not None else None
         self.explore_x_min = explore_region[0][0]
@@ -178,12 +180,12 @@ class RRT(PathPlanner):
             obstacles: list = [],
             enlarge_range: float = 0.0,
     ):
-        fig, ax = set_fig_params(figsize, xlim, ylim)
+        self.fig, ax = set_fig_params(figsize, xlim, ylim)
         draw_obstacles(ax, obstacles, enlarge_range)
         self.draw_nodes(ax)
         self.draw_path(ax)
-        ax.plot(self.start_node.x, self.start_node.y, "xr")
-        ax.plot(self.goal_node.x, self.goal_node.y, "xr")
+        draw_start(ax, self.start_pos)
+        draw_goal(ax, self.goal_pos)
         plt.show()
 
 
@@ -638,11 +640,9 @@ class ChanceConstrainedRRT(RRT):
                     p = np.array([n.x, n.y, n.head])
                     e = sigma_ellipse(p[0:2], n.cov[0:2, 0:2], 3)
                     ax.add_patch(e)
-        ax.plot(self.start_node.x, self.start_node.y, "or")
-        ax.plot(self.goal_node.x, self.goal_node.y, "xr")
 
-        # for n in self.node_list:
-        #     ax.scatter(n.x, n.y, c='g', s=10, zorder=10)
+        draw_start(ax, self.start_pos)
+        draw_goal(ax, self.goal_pos)
 
         plt.show()
 
