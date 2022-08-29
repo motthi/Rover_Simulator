@@ -1,3 +1,4 @@
+import cv2
 import math
 import numpy as np
 import matplotlib.pyplot as plt
@@ -39,12 +40,12 @@ def set_fig_params(figsize, xlim, ylim):
     return fig, ax
 
 
-def draw_obstacles(ax, obstacles, enlarge_range):
+def draw_obstacles(ax, obstacles, enlarge_range, alpha=1.0):
     for obstacle in obstacles:
-        enl_obs = patches.Circle(xy=(obstacle.pos[0], obstacle.pos[1]), radius=obstacle.r + enlarge_range, fc='black', ec='black', zorder=-1.0)
+        enl_obs = patches.Circle(xy=(obstacle.pos[0], obstacle.pos[1]), radius=obstacle.r + enlarge_range, fc='black', ec='black', zorder=-1.0, alpha=alpha)
         ax.add_patch(enl_obs)
     for obstacle in obstacles:
-        obs = patches.Circle(xy=(obstacle.pos[0], obstacle.pos[1]), radius=obstacle.r, fc='black', ec='black', zorder=-1.0)
+        obs = patches.Circle(xy=(obstacle.pos[0], obstacle.pos[1]), radius=obstacle.r, fc='black', ec='black', zorder=-1.0, alpha=alpha)
         ax.add_patch(obs)
 
 
@@ -70,6 +71,29 @@ def draw_grid(idx: np.ndarray, grid_width: float, color: str, alpha: float, ax, 
         elems.append(ax.add_patch(r))
     else:
         ax.add_patch(r)
+
+
+def draw_grid_map_contour(ax, grid_map, grid_num, grid_width, levels):
+    x = np.linspace(0, grid_num[0], grid_num[0]) * grid_width
+    y = np.linspace(0, grid_num[1], grid_num[1]) * grid_width
+    X, Y = np.meshgrid(x, y)
+    cntr = ax.contour(x, y, grid_map.T, levels=levels, cmap="brg")
+    ax.clabel(cntr)
+
+
+def draw_grid_map(ax, grid_map, cmap, vmin, vmax, alpha, extent, zorder, colorbar=True):
+    grid_map = cv2.rotate(grid_map, cv2.ROTATE_90_COUNTERCLOCKWISE)
+    im = ax.imshow(
+        grid_map,
+        cmap=cmap,
+        vmin=vmin,
+        vmax=vmax,
+        alpha=alpha,
+        extent=extent,
+        zorder=zorder
+    )
+    plt.colorbar(im) if colorbar is True else None
+
 
 def occupancyToColor(occupancy: float) -> str:
     return "#" + format(int(255 * (1 - occupancy)), '02x') * 3

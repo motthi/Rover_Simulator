@@ -6,6 +6,7 @@ import matplotlib.patches as patches
 from scipy.spatial import cKDTree
 from rover_simulator.core import Mapper, Sensor, Obstacle
 from rover_simulator.utils.utils import isInRange, angle_to_range, isInList, round_off
+from rover_simulator.utils.draw import draw_grid_map, set_fig_params, draw_obstacles, draw_start, draw_goal, draw_grid
 
 
 class GridMapper(Mapper):
@@ -161,48 +162,19 @@ class GridMapper(Mapper):
         enlarge_obstacle: float = 0.0,
         map_name='map'
     ) -> None:
-        self.fig = plt.figure(figsize=figsize)
-        ax = self.fig.add_subplot(111)
-        ax.set_aspect('equal')
-        ax.set_xlim(xlim[0], xlim[1])
-        ax.set_ylim(ylim[0], ylim[1])
-        ax.set_xlabel("X [m]", fontsize=10)
-        ax.set_ylabel("Y [m]", fontsize=10)
+        self.fig, ax = set_fig_params(figsize, xlim, ylim)
+        extent = (
+            -self.grid_width / 2,
+            self.grid_width * self.grid_num[0] - self.grid_width / 2,
+            -self.grid_width / 2, self.grid_width * self.grid_num[1] - self.grid_width / 2
+        )
 
         if map_name == 'map':
-            # Draw Obstacles
-            for obstacle in obstacles:
-                enl_obs = patches.Circle(xy=(obstacle.pos[0], obstacle.pos[1]), radius=obstacle.r + enlarge_obstacle, fc='gray', ec='gray', zorder=-1.0)
-                ax.add_patch(enl_obs)
-            for obstacle in obstacles:
-                obs = patches.Circle(xy=(obstacle.pos[0], obstacle.pos[1]), radius=obstacle.r, fc='black', ec='black', zorder=-1.0)
-                ax.add_patch(obs)
-
-            im = ax.imshow(
-                cv2.rotate(self.map, cv2.ROTATE_90_COUNTERCLOCKWISE),
-                cmap="Greys",
-                alpha=0.5,
-                extent=(
-                    -self.grid_width / 2,
-                    self.grid_width * self.grid_num[0] - self.grid_width / 2,
-                    -self.grid_width / 2, self.grid_width * self.grid_num[1] - self.grid_width / 2
-                ),
-                zorder=1.0
-            )
-            plt.colorbar(im)
+            draw_obstacles(ax, obstacles, enlarge_obstacle)
+            draw_grid_map(ax, self.map, "Greys", 0.0, 1.0, 0.5, extent, 1.0)
         elif map_name == 'table':
-            for obstacle in obstacles:
-                enl_obs = patches.Circle(xy=(obstacle.pos[0], obstacle.pos[1]), radius=obstacle.r + enlarge_obstacle, fc='gray', ec='gray', alpha=0.3)
-                ax.add_patch(enl_obs)
-            for obstacle in obstacles:
-                obs = patches.Circle(xy=(obstacle.pos[0], obstacle.pos[1]), radius=obstacle.r, fc='black', ec='black', alpha=0.3)
-                ax.add_patch(obs)
-            for obstacle in self.obstacles_table:
-                enl_obs = patches.Circle(xy=(obstacle.pos[0], obstacle.pos[1]), radius=obstacle.r + enlarge_obstacle, fc='gray', ec='gray')
-                ax.add_patch(enl_obs)
-            for obstacle in self.obstacles_table:
-                obs = patches.Circle(xy=(obstacle.pos[0], obstacle.pos[1]), radius=obstacle.r, fc='black', ec='black')
-                ax.add_patch(obs)
+            draw_obstacles(ax, obstacles, enlarge_obstacle, 0.3)
+            draw_obstacles(ax, self.obstacles_table, enlarge_obstacle, 0.3)
 
 
 class TableMapper(Mapper):
@@ -267,18 +239,5 @@ class TableMapper(Mapper):
             self.obstacle_kdTree = None
 
     def draw_map(self, xlim: list[float], ylim: list[float], figsize=(8, 8)) -> None:
-        self.fig = plt.figure(figsize=figsize)
-        ax = self.fig.add_subplot(111)
-        ax.set_aspect('equal')
-        ax.set_xlim(xlim[0], xlim[1])
-        ax.set_ylim(ylim[0], ylim[1])
-        ax.set_xlabel("X [m]", fontsize=10)
-        ax.set_ylabel("Y [m]", fontsize=10)
-
-        for obstacle in self.obstacles_table:
-            enl_obs = patches.Circle(xy=(obstacle.pos[0], obstacle.pos[1]), radius=obstacle.r + self.rover_r, fc='gray', ec='gray')
-            ax.add_patch(enl_obs)
-
-        for obstacle in self.obstacles_table:
-            obs = patches.Circle(xy=(obstacle.pos[0], obstacle.pos[1]), radius=obstacle.r, fc='black', ec='black')
-            ax.add_patch(obs)
+        self.fig, ax = set_fig_params(figsize, xlim, ylim)
+        draw_obstacles(ax, self.obstacles_table, self.rover_r, 0.3)

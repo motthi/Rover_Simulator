@@ -8,7 +8,8 @@ from typing import List, Tuple
 from rover_simulator.core import Mapper, Obstacle
 from rover_simulator.navigation.mapper import GridMapper
 from rover_simulator.navigation.path_planner import PathPlanner, PathNotFoundError
-from rover_simulator.utils import environment_cmap, round_off
+from rover_simulator.utils.utils import round_off
+from rover_simulator.utils.draw import *
 
 
 neigbor_grids = np.array([[1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1], [0, -1], [1, -1]])
@@ -93,7 +94,7 @@ class Dijkstra(GridBasePathPlanning):
         self.goal_idx = self.poseToIndex(goal_pos) if goal_pos is not None else None
         self.grid_num = np.array(map.shape) if map is not None else None
         self.grid_map = np.full(self.grid_num, 0.5, dtype=float) if map is not None else None
-        self.cost_map = np.full(self.grid_num, 0.0, dtype=float) if map is not None else None
+        self.cost_map = np.full(self.grid_num, float('inf'), dtype=float) if map is not None else None
         self.id_map = np.full(self.grid_num, 0, dtype=np.int32) if map is not None else None
         self.parent_id_map = np.full(self.grid_num, 0, dtype=np.int32) if map is not None else None
         self.is_opened_map = np.full(np.append(np.array(map.shape), 3), 0.0) if map is not None else None
@@ -106,34 +107,32 @@ class Dijkstra(GridBasePathPlanning):
         self.name = "Dijkstra"
 
         if map is not None:
-            cnt = 0
-            for u, _ in np.ndenumerate(self.cost_map):
+            for cnt, (u, _) in enumerate(np.ndenumerate(self.cost_map)):
                 self.id_map[u[0]][u[1]] = cnt
                 if self.isStart(u):
                     self.open_list.append([cnt, 0, 0])
                     self.is_opened_map[u[0]][u[1]][0] = 1.0
                     self.is_opened_map[u[0]][u[1]][1] = 0.0
                     self.is_opened_map[u[0]][u[1]][2] = 0.0
-                cnt += 1
+                    self.cost_map[u[0]][u[1]] = 0.0
 
     def set_map(self, mapper: Mapper):
         self.grid_width = mapper.grid_width
         self.grid_num = np.array(mapper.map.shape)
         self.grid_map = copy.copy(mapper.map)
-        self.cost_map = np.full(self.grid_num, 0.0, dtype=float)
+        self.cost_map = np.full(self.grid_num, float('inf'), dtype=float)
         self.id_map = np.full(self.grid_num, 0, dtype=np.int32)
         self.parent_id_map = np.full(self.grid_num, 0, dtype=np.int32)
         self.is_opened_map = np.full(np.append(np.array(mapper.map.shape), 3), 0.0)
         self.is_closed_map = np.full(np.append(np.array(mapper.map.shape), 3), 0.0)
-        cnt = 0
-        for u, _ in np.ndenumerate(self.cost_map):
+        for cnt, (u, _) in enumerate(np.ndenumerate(self.cost_map)):
             self.id_map[u[0]][u[1]] = cnt
             if self.isStart(u):
                 self.open_list.append([cnt, 0, 0])
                 self.is_opened_map[u[0]][u[1]][0] = 1.0
                 self.is_opened_map[u[0]][u[1]][1] = 0.0
                 self.is_opened_map[u[0]][u[1]][2] = 0.0
-            cnt += 1
+                self.cost_map[u[0]][u[1]] = 0.0
 
     def calculate_path(self, *args):
         if self.isOutOfBounds(self.start_idx):
@@ -173,7 +172,8 @@ class Dijkstra(GridBasePathPlanning):
 
     def calculateCost(self, idx, cost_g):
         for neigbor_idx in self.listFreeNeigbor(idx):
-            evaluation_f = cost_g + self.cost(neigbor_idx) + self.c(neigbor_idx, idx)
+            # evaluation_f = cost_g + self.cost(neigbor_idx) + self.c(neigbor_idx, idx)
+            evaluation_f = cost_g + self.c(neigbor_idx, idx)
             if self.isOpened(neigbor_idx):
                 neigbor_cost_f = self.is_opened_map[neigbor_idx[0]][neigbor_idx[1]][1]
                 neigbor_cost_g = self.is_opened_map[neigbor_idx[0]][neigbor_idx[1]][2]
@@ -252,50 +252,36 @@ class Dijkstra(GridBasePathPlanning):
         obstacles: List[Obstacle] = [],
         map_name: str = 'cost',
         enlarge_obstacle: float = 0.0,
+        draw_map=True,
+        draw_contour=True
     ):
-        self.fig = plt.figure(figsize=figsize)
-        ax = self.fig.add_subplot(111)
-        ax.set_aspect('equal')
-        ax.set_xlim(xlim[0], xlim[1])
-        ax.set_ylim(ylim[0], ylim[1])
-        ax.set_xlabel("X [m]", fontsize=10)
-        ax.set_ylabel("Y [m]", fontsize=10)
-
-        # Draw Obstacles
-        for obstacle in obstacles:
-            enl_obs = patches.Circle(xy=(obstacle.pos[0], obstacle.pos[1]), radius=obstacle.r + enlarge_obstacle, fc='gray', ec='gray', zorder=-1.0)
-            ax.add_patch(enl_obs)
-        for obstacle in obstacles:
-            obs = patches.Circle(xy=(obstacle.pos[0], obstacle.pos[1]), radius=obstacle.r, fc='black', ec='black', zorder=-1.0)
-            ax.add_patch(obs)
+        self.fig, ax = set_fig_params(figsize, xlim, ylim)
+        draw_obstacles(ax, obstacles, enlarge_obstacle)
 
         # Draw Map
         if map_name == 'cost':
-            draw_map = self.cost_map
+            map = self.cost_map
             cmap = 'plasma'
             vmin = None
             vmax = None
         elif map_name == 'grid':
-            draw_map = self.grid_map
+            map = self.grid_map
             cmap = 'Greys'
             vmin = 0.0
             vmax = 1.0
-
-        draw_map = cv2.rotate(draw_map, cv2.ROTATE_90_COUNTERCLOCKWISE)
-        im = ax.imshow(
-            draw_map,
-            cmap=cmap,
-            vmin=vmin,
-            vmax=vmax,
-            alpha=0.5,
-            extent=(
-                -self.grid_width / 2,
-                self.grid_width * self.grid_num[0] - self.grid_width / 2,
-                -self.grid_width / 2, self.grid_width * self.grid_num[1] - self.grid_width / 2
-            ),
-            zorder=1.0
+        extent = (
+            -self.grid_width / 2,
+            self.grid_width * self.grid_num[0] - self.grid_width / 2,
+            -self.grid_width / 2, self.grid_width * self.grid_num[1] - self.grid_width / 2
         )
-        plt.colorbar(im)
+
+        if draw_map:
+            draw_grid_map(ax, map, cmap, vmin, vmax, 0.5, extent, 1.0)
+        if draw_contour:
+            draw_grid_map_contour(ax, map, self.grid_num, self.grid_width, 20)
+        draw_start(ax, self.indexToPose(self.start_idx))
+        draw_goal(ax, self.indexToPose(self.goal_idx))
+        plt.show()
 
 
 class Astar(Dijkstra):
@@ -310,7 +296,7 @@ class Astar(Dijkstra):
 
     def calculateCost(self, idx, cost_g):  # コストの計算
         for neigbor_idx in self.listFreeNeigbor(idx):
-            evaluation_f = cost_g + self.cost(neigbor_idx) + self.c(neigbor_idx, idx) + self.__h(neigbor_idx)  # 評価を計算
+            evaluation_f = cost_g + self.c(neigbor_idx, idx) + self.__h(neigbor_idx)  # 評価を計算
             if self.isOpened(neigbor_idx):  # オープンリストに含まれているか
                 neigbor_cost_f = self.is_opened_map[neigbor_idx[0]][neigbor_idx[1]][1]
                 neigbor_cost_g = self.is_opened_map[neigbor_idx[0]][neigbor_idx[1]][2]
@@ -585,29 +571,20 @@ class DstarLite(GridBasePathPlanning):
         map_name: str = 'cost',
         obstacles: List[Obstacle] = [],
         enlarge_obstacle: float = 0.0,
+        draw_map: bool = True,
+        draw_contour: bool = True
     ):
-        self.fig = plt.figure(figsize=figsize)
-        ax = self.fig.add_subplot(111)
-        ax.set_aspect('equal')
-        ax.set_xlim(xlim[0], xlim[1])
-        ax.set_ylim(ylim[0], ylim[1])
-        ax.set_xlabel("X [m]", fontsize=10)
-        ax.set_ylabel("Y [m]", fontsize=10)
+        self.fig, ax = set_fig_params(figsize, xlim, ylim)
 
         if map_name == 'cost':
-            draw_map = self.g_map
+            map = self.g_map
         elif map_name == 'metric':
-            draw_map = self.metric_grid_map
+            map = self.metric_grid_map
         elif map_name == 'local':
-            draw_map = self.local_grid_map
+            map = self.local_grid_map
 
         # Draw Obstacles
-        for obstacle in obstacles:
-            enl_obs = patches.Circle(xy=(obstacle.pos[0], obstacle.pos[1]), radius=obstacle.r + enlarge_obstacle, fc='gray', ec='gray', zorder=-1.0)
-            ax.add_patch(enl_obs)
-        for obstacle in obstacles:
-            obs = patches.Circle(xy=(obstacle.pos[0], obstacle.pos[1]), radius=obstacle.r, fc='black', ec='black', zorder=-1.0)
-            ax.add_patch(obs)
+        draw_obstacles(ax, obstacles, enlarge_obstacle)
 
         # Draw Map
         if map_name == 'cost':
@@ -622,20 +599,19 @@ class DstarLite(GridBasePathPlanning):
             cmap = 'Greys'
             vmin = 0.0
             vmax = 1.0
-        im = ax.imshow(
-            cv2.rotate(draw_map, cv2.ROTATE_90_COUNTERCLOCKWISE),
-            cmap=cmap,
-            vmin=vmin,
-            vmax=vmax,
-            alpha=0.5,
-            extent=(
-                -self.grid_width / 2,
-                self.grid_width * self.grid_num[0] - self.grid_width / 2,
-                -self.grid_width / 2, self.grid_width * self.grid_num[1] - self.grid_width / 2
-            ),
-            zorder=1.0
+        extent = (
+            -self.grid_width / 2,
+            self.grid_width * self.grid_num[0] - self.grid_width / 2,
+            -self.grid_width / 2, self.grid_width * self.grid_num[1] - self.grid_width / 2
         )
-        plt.colorbar(im)
+
+        if draw_map:
+            draw_grid_map(ax, map, cmap, vmin, vmax, 0.5, extent, 1.0)
+        if draw_contour:
+            draw_grid_map_contour(ax, map, self.grid_num, self.grid_width, 30)
+        draw_start(ax, self.indexToPose(self.start_idx))
+        draw_goal(ax, self.indexToPose(self.goal_idx))
+        plt.show()
 
     def computeShortestPath(self, index):
         U_row = [row[1] for row in self.U]
