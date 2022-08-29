@@ -7,7 +7,7 @@ import matplotlib.animation as anm
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from rover_simulator.core import Obstacle
-from rover_simulator.utils.draw import sigma_ellipse
+from rover_simulator.utils.draw import draw_obstacles, sigma_ellipse, set_fig_params
 
 if 'google.colab' in sys.modules:
     from tqdm.notebook import tqdm  # Google Colaboratory
@@ -57,23 +57,8 @@ class History():
         draw_sensing_points: bool = True,
         draw_sensing_area: bool = True
     ):
-        self.fig = plt.figure(figsize=figsize)
-        ax = self.fig.add_subplot(111)
-        ax.set_aspect('equal')
-        ax.set_xlim(xlim[0], xlim[1])
-        ax.set_ylim(ylim[0], ylim[1])
-        ax.set_xlabel("X [m]", fontsize=10)
-        ax.set_ylabel("Y [m]", fontsize=10)
-
-        # Draw Enlarged Obstacle Regions
-        for obstacle in obstacles:
-            enl_obs = patches.Circle(xy=(obstacle.pos[0], obstacle.pos[1]), radius=obstacle.r + enlarge_obstacle, fc='gray', ec='gray')
-            ax.add_patch(enl_obs)
-
-        # Draw Obstacles
-        for obstacle in obstacles:
-            obs = patches.Circle(xy=(obstacle.pos[0], obstacle.pos[1]), radius=obstacle.r, fc='black', ec='black')
-            ax.add_patch(obs)
+        self.fig, ax = set_fig_params(figsize, xlim, ylim)
+        draw_obstacles(ax, obstacles, enlarge_obstacle)
 
         # Draw Sensing Results
         for i, sensing_result in enumerate(self.sensing_results):
@@ -148,25 +133,8 @@ class History():
     ) -> None:
         end_step = len(self.steps) if end_step is None else end_step
         end_step = end_step if end_step > len(self.steps) else len(self.steps)
-        fig = plt.figure(figsize=figsize)
-        ax = fig.add_subplot(111)
-        ax.set_aspect('equal')
-        ax.set_xlim(xlim[0], xlim[1])
-        ax.set_ylim(ylim[0], ylim[1])
-        ax.set_xlabel("X [m]", fontsize=10)
-        ax.set_ylabel("Y [m]", fontsize=10)
-        self.xlim = xlim
-        self.ylim = ylim
-
-        # Draw Enlarged Obstacle Regions
-        for obstacle in obstacles:
-            enl_obs = patches.Circle(xy=(obstacle.pos[0], obstacle.pos[1]), radius=obstacle.r + enlarge_obstacle, fc='gray', ec='gray')
-            ax.add_patch(enl_obs)
-
-        # Draw Obstacles
-        for obstacle in obstacles:
-            obs = patches.Circle(xy=(obstacle.pos[0], obstacle.pos[1]), radius=obstacle.r, fc='black', ec='black')
-            ax.add_patch(obs)
+        self.fig, ax = set_fig_params(figsize, xlim, ylim)
+        draw_obstacles(ax, obstacles, enlarge_obstacle)
 
         elems = []
 
@@ -177,7 +145,7 @@ class History():
                 self.animate_one_step(i, ax, elems, start_step, pbar)
         else:
             self.ani = anm.FuncAnimation(
-                fig, self.animate_one_step, fargs=(ax, elems, start_step, pbar),
+                self.fig, self.animate_one_step, fargs=(ax, elems, start_step, pbar),
                 frames=end_step - start_step, interval=int(self.time_interval * 1000),
                 repeat=False
             )
@@ -290,23 +258,8 @@ class HistoryWithKalmanFilter(History):
         draw_sensing_area: bool = True,
         plot_step_uncertainty: int = 20
     ):
-        self.fig = plt.figure(figsize=figsize)
-        ax = self.fig.add_subplot(111)
-        ax.set_aspect('equal')
-        ax.set_xlim(xlim[0], xlim[1])
-        ax.set_ylim(ylim[0], ylim[1])
-        ax.set_xlabel("X [m]", fontsize=10)
-        ax.set_ylabel("Y [m]", fontsize=10)
-
-        # Draw Enlarged Obstacle Regions
-        for obstacle in obstacles:
-            enl_obs = patches.Circle(xy=(obstacle.pos[0], obstacle.pos[1]), radius=obstacle.r + enlarge_obstacle, fc='gray', ec='gray')
-            ax.add_patch(enl_obs)
-
-        # Draw Obstacles
-        for obstacle in obstacles:
-            obs = patches.Circle(xy=(obstacle.pos[0], obstacle.pos[1]), radius=obstacle.r, fc='black', ec='black')
-            ax.add_patch(obs)
+        self.fig, ax = set_fig_params(figsize, xlim, ylim)
+        draw_obstacles(ax, obstacles, enlarge_obstacle)
 
         # Draw Sensing Results
         for i, sensing_result in enumerate(self.sensing_results):

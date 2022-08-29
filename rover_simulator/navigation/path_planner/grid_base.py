@@ -1057,13 +1057,7 @@ class FieldDstar(GridBasePathPlanning):
         obstacles: List[Obstacle] = [],
         enlarge_obstacle: float = 0.0,
     ):
-        self.fig = plt.figure(figsize=figsize)
-        ax = self.fig.add_subplot(111)
-        ax.set_aspect('equal')
-        ax.set_xlim(xlim[0], xlim[1])
-        ax.set_ylim(ylim[0], ylim[1])
-        ax.set_xlabel("X [m]", fontsize=10)
-        ax.set_ylabel("Y [m]", fontsize=10)
+        self.fig, ax = set_fig_params(figsize, xlim, ylim)
 
         if map_name == 'cost':
             draw_map = self.g_map

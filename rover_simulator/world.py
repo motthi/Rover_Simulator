@@ -211,26 +211,8 @@ class World():
         draw_sensing_points: bool = True
     ) -> None:
         end_step = self.step if end_step is None else end_step
-        fig = plt.figure(figsize=figsize)
-        ax = fig.add_subplot(111)
-        ax.set_aspect('equal')
-        ax.set_xlim(xlim[0], xlim[1])
-        ax.set_ylim(ylim[0], ylim[1])
-        ax.set_xlabel("X [m]", fontsize=10)
-        ax.set_ylabel("Y [m]", fontsize=10)
-        self.xlim = xlim
-        self.ylim = ylim
-
-        # Draw Enlarged Obstacle Regions
-        for obstacle in self.obstacles:
-            enl_obs = patches.Circle(xy=(obstacle.pos[0], obstacle.pos[1]), radius=obstacle.r + enlarge_obstacle, fc='gray', ec='gray')
-            ax.add_patch(enl_obs)
-
-        # Draw Obstacles
-        for obstacle in self.obstacles:
-            obs = patches.Circle(xy=(obstacle.pos[0], obstacle.pos[1]), radius=obstacle.r, fc='black', ec='black')
-            ax.add_patch(obs)
-
+        self.fig, ax = set_fig_params(figsize, xlim, ylim)
+        draw_obstacles(ax, self.obstacles, enlarge_obstacle)
         elems = []
 
         # Start Animation
@@ -240,7 +222,7 @@ class World():
                 self.animate_one_step(i, ax, elems, start_step, pbar, draw_sensing_points)
         else:
             self.ani = anm.FuncAnimation(
-                fig, self.animate_one_step, fargs=(ax, elems, start_step, pbar, draw_sensing_points),
+                self.fig, self.animate_one_step, fargs=(ax, elems, start_step, pbar, draw_sensing_points),
                 frames=end_step - start_step, interval=int(self.time_interval * 1000),
                 repeat=False
             )
