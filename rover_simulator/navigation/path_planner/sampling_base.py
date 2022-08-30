@@ -1,4 +1,5 @@
 from __future__ import annotations
+from platform import node
 import random
 import math
 import copy
@@ -48,6 +49,7 @@ class RRT(PathPlanner):
             self.cost = self.dist_nodes
         else:
             self.cost = cost_func
+        self.node_list = []
         self.planned_path = []
 
         # self.known_obstacles = known_obstacles
@@ -160,6 +162,48 @@ class RRT(PathPlanner):
         waypoints.append(self.start_node)
         waypoints.reverse()
         return waypoints
+
+    def save_log(self, src: str) -> None:
+        num_node = len(self.node_list)
+        node_pos = np.array([np.array([n.x, n.y]) for n in self.node_list])
+        node_costs = np.array([n.cost for n in self.node_list])
+        parents_idx = []
+        node_path_x = []
+        node_path_y = []
+        for n in self.node_list:
+            if n.parent is None:
+                parents_idx.append(-1)
+            else:
+                parents_idx.append(self.node_list.index(n.parent))
+            if len(n.path_x) == 0:
+                node_path_x.append(np.array([np.inf, np.inf]))
+            else:
+                node_path_x.append(np.array([n.path_x[0], n.path_x[-1]]))
+            if len(n.path_y) == 0:
+                node_path_y.append(np.array([np.inf, np.inf]))
+            else:
+                node_path_y.append(np.array([n.path_y[0], n.path_y[-1]]))
+        np.savez(src, num_node=num_node, node_pos=node_pos, node_path_x=node_path_x, node_path_y=node_path_y, node_costs=node_costs, parents_idx=parents_idx)
+
+    def load_log(self, src: str) -> None:
+        log = np.load(src)
+        num_node = log['num_node']
+        node_pos = log['node_pos']
+        node_path_x = log['node_path_x']
+        node_path_y = log['node_path_y']
+        node_costs = log['node_costs']
+        node_parents_idx = log['parents_idx']
+        for i in range(num_node):
+            self.node_list.append(self.Node(node_pos[i][0], node_pos[i][1]))
+        for i in range(num_node):
+            self.node_list[i].path_x = node_path_x[i] if np.sum(np.isinf(node_path_x[i])) == 0 else []
+            self.node_list[i].path_y = node_path_y[i] if np.sum(np.isinf(node_path_y[i])) == 0 else []
+            self.node_list[i].cost = node_costs[i]
+            if node_parents_idx[i] == -1:
+                self.node_list[i].parent = None
+            else:
+                self.node_list[i].parent = self.node_list[node_parents_idx[i]]
+        self.planned_path = self.generate_final_course(len(self.node_list) - 1)
 
     def draw_path(self, ax):
         if self.planned_path is None:
@@ -390,6 +434,12 @@ class RRTstar(RRT):
                 node.cost = self.calc_new_cost(parent_node, node)
                 self.propagate_cost_to_leaves(node)
 
+    def load_log(self, src: str) -> None:
+        super().load_log(src)
+        last_idx = self.search_best_goal_node()
+        if last_idx is not None:
+            self.planned_path = self.generate_final_course(last_idx)
+
 
 class ChanceConstrainedRRT(RRT):
     class Node(RRT.Node):
@@ -397,7 +447,7 @@ class ChanceConstrainedRRT(RRT):
             super().__init__(x, y)
             self.head = head
             self.cov = cov
-            self.cost_lb = None         # Lower bound cost
+            self.cost_lb = float('inf')         # Lower bound cost
             self.cost_ub = float('inf')  # Upper bound cost
             self.cost_fs = 0.0          # Cost from start
             self.childs = []
@@ -608,6 +658,58 @@ class ChanceConstrainedRRT(RRT):
             if ellipse_collision(e1, e2):
                 return False
         return True
+
+    def save_log(self, src: str) -> None:
+        num_node = len(self.node_list)
+        node_pos = np.array([np.array([n.x, n.y]) for n in self.node_list])
+        node_head = np.array([n.head for n in self.node_list])
+        node_cov = np.array([n.cov for n in self.node_list])
+        node_lb_costs = np.array([n.cost_lb for n in self.node_list])
+        node_ub_costs = np.array([n.cost_ub for n in self.node_list])
+        node_fs_costs = np.array([n.cost_fs for n in self.node_list])
+        parents_idx = []
+        node_path_x = []
+        node_path_y = []
+        for n in self.node_list:
+            if n.parent is None:
+                parents_idx.append(-1)
+            else:
+                parents_idx.append(self.node_list.index(n.parent))
+            if len(n.path_x) == 0:
+                node_path_x.append(np.array([np.inf, np.inf]))
+            else:
+                node_path_x.append(np.array([n.path_x[0], n.path_x[-1]]))
+            if len(n.path_y) == 0:
+                node_path_y.append(np.array([np.inf, np.inf]))
+            else:
+                node_path_y.append(np.array([n.path_y[0], n.path_y[-1]]))
+        np.savez(src, num_node=num_node, node_pos=node_pos, node_head=node_head, node_cov=node_cov, node_lb_costs=node_lb_costs, node_ub_costs=node_ub_costs, node_fs_costs=node_fs_costs, parents_idx=parents_idx, node_path_x=node_path_x, node_path_y=node_path_y)
+
+    def load_log(self, src: str) -> None:
+        log = np.load(src)
+        num_node = log['num_node']
+        node_pos = log['node_pos']
+        node_path_x = log['node_path_x']
+        node_path_y = log['node_path_y']
+        node_head = log['node_head']
+        node_cov = log['node_cov']
+        node_lb_costs = log['node_lb_costs']
+        node_ub_costs = log['node_ub_costs']
+        node_fs_costs = log['node_fs_costs']
+        node_parents_idx = log['parents_idx']
+        for i in range(num_node):
+            self.node_list.append(self.Node(node_pos[i][0], node_pos[i][1], node_head[i], node_cov[i]))
+        for i in range(num_node):
+            self.node_list[i].path_x = node_path_x[i] if np.sum(np.isinf(node_path_x[i])) == 0 else []
+            self.node_list[i].path_y = node_path_y[i] if np.sum(np.isinf(node_path_y[i])) == 0 else []
+            self.node_list[i].cost_lb = node_lb_costs[i]
+            self.node_list[i].cost_ub = node_ub_costs[i]
+            self.node_list[i].cost_fs = node_fs_costs[i]
+            if node_parents_idx[i] == -1:
+                self.node_list[i].parent = None
+            else:
+                self.node_list[i].parent = self.node_list[node_parents_idx[i]]
+        self.planned_path = self.generate_final_course()
 
     def draw(
             self,
