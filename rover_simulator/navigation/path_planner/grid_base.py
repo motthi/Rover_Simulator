@@ -245,18 +245,18 @@ class Dijkstra(GridBasePathPlanning):
     def c(self, u, v):
         return np.linalg.norm(u - v)
 
-    def draw_map(
+    def draw(
         self,
         xlim: List[float], ylim: List[float],
         figsize: Tuple[float, float] = (8, 8),
         obstacles: List[Obstacle] = [],
         map_name: str = 'cost',
-        enlarge_obstacle: float = 0.0,
+        enlarge_range: float = 0.0,
         draw_map=True,
         draw_contour=True
     ):
         self.fig, ax = set_fig_params(figsize, xlim, ylim)
-        draw_obstacles(ax, obstacles, enlarge_obstacle)
+        draw_obstacles(ax, obstacles, enlarge_range)
 
         # Draw Map
         if map_name == 'cost':
@@ -564,13 +564,13 @@ class DstarLite(GridBasePathPlanning):
     def local_map(self, s):
         return self.local_grid_map[s[0]][s[1]]
 
-    def draw_map(
+    def draw(
         self,
         xlim: List[float], ylim: List[float],
         figsize: Tuple[float, float] = (8, 8),
         map_name: str = 'cost',
         obstacles: List[Obstacle] = [],
-        enlarge_obstacle: float = 0.0,
+        enlarge_range: float = 0.0,
         draw_map: bool = True,
         draw_contour: bool = True
     ):
@@ -584,7 +584,7 @@ class DstarLite(GridBasePathPlanning):
             map = self.local_grid_map
 
         # Draw Obstacles
-        draw_obstacles(ax, obstacles, enlarge_obstacle)
+        draw_obstacles(ax, obstacles, enlarge_range)
 
         # Draw Map
         if map_name == 'cost':
@@ -1049,13 +1049,13 @@ class FieldDstar(GridBasePathPlanning):
         else:
             return False
 
-    def draw_map(
+    def draw(
         self,
         xlim: List[float], ylim: List[float],
         figsize: Tuple[float, float] = (8, 8),
         map_name: str = 'cost',
         obstacles: List[Obstacle] = [],
-        enlarge_obstacle: float = 0.0,
+        enlarge_range: float = 0.0,
     ):
         self.fig, ax = set_fig_params(figsize, xlim, ylim)
 
@@ -1068,7 +1068,7 @@ class FieldDstar(GridBasePathPlanning):
 
         # Draw Obstacles
         for obstacle in obstacles:
-            enl_obs = patches.Circle(xy=(obstacle.pos[0], obstacle.pos[1]), radius=obstacle.r + enlarge_obstacle, fc='gray', ec='gray', zorder=-1.0)
+            enl_obs = patches.Circle(xy=(obstacle.pos[0], obstacle.pos[1]), radius=obstacle.r + enlarge_range, fc='gray', ec='gray', zorder=-1.0)
             ax.add_patch(enl_obs)
         for obstacle in obstacles:
             obs = patches.Circle(xy=(obstacle.pos[0], obstacle.pos[1]), radius=obstacle.r, fc='black', ec='black', zorder=-1.0)

@@ -1,13 +1,13 @@
 from __future__ import annotations
-from platform import node
 import random
 import math
 import copy
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.patches as patches
 from scipy.spatial import cKDTree
 from rover_simulator.navigation.path_planner import PathPlanner
-from rover_simulator.utils.utils import angle_to_range, GeoEllipse, cov_to_ellipse, ellipse_collision
+from rover_simulator.utils.utils import angle_to_range
 from rover_simulator.utils.motion import covariance_transition, state_transition
 from rover_simulator.utils.draw import set_fig_params, draw_obstacles, draw_start, draw_goal, sigma_ellipse
 
@@ -52,7 +52,7 @@ class RRT(PathPlanner):
         self.node_list = []
         self.planned_path = []
 
-        # self.known_obstacles = known_obstacles
+        self.known_obstacles = known_obstacles
         self.obstacle_list = [[obstacle.pos[0], obstacle.pos[1], obstacle.r + enlarge_range] for obstacle in known_obstacles]
         # obstacle_positions = [obstacle.pos for obstacle in known_obstacles] if not known_obstacles is None else None
         # self.obstacle_kdTree = cKDTree(obstacle_positions)
@@ -91,7 +91,7 @@ class RRT(PathPlanner):
                     return [np.array([n.x, n.y]) for n in self.planned_path]
         return []
 
-    def steer(self, from_node, to_node, extend_length=float("inf")):
+    def steer(self, from_node: Node, to_node: Node, extend_length: float = float("inf")):
         new_node = self.Node(from_node.x, from_node.y)
         d, theta = self.calc_distance_and_angle(new_node, to_node)
         new_node.path_x = [new_node.x]
@@ -126,6 +126,11 @@ class RRT(PathPlanner):
             rnd = self.Node(self.goal_node.x, self.goal_node.y)
         return rnd
 
+    def get_nearest_node(self, node_list, rnd_node):
+        dlist = [(node.x - rnd_node.x)**2 + (node.y - rnd_node.y)**2 for node in node_list]
+        idx = dlist.index(min(dlist))
+        return node_list[idx]
+
     def get_nearest_node_index(self, node_list, rnd_node):
         dlist = [(node.x - rnd_node.x)**2 + (node.y - rnd_node.y)**2 for node in node_list]
         minind = dlist.index(min(dlist))
@@ -146,15 +151,20 @@ class RRT(PathPlanner):
         return math.hypot(x - self.goal_node.x, y - self.goal_node.y)
 
     def calc_distance_and_angle(self, from_node, to_node):
-        dx = to_node.x - from_node.x
-        dy = to_node.y - from_node.y
-        d = math.hypot(dx, dy)
-        theta = math.atan2(dy, dx)
-        return d, theta
+        return self.distance(from_node, to_node), self.node_heading_angle(from_node, to_node)
+
+    def distance(self, n1: RRT.Node, n2: RRT.Node):
+        return math.hypot(n2.x - n1.x, n2.y - n1.y)
+
+    def node_heading_angle(self, from_node: RRT.Node, to_node: RRT.Node):
+        return math.atan2(to_node.y - from_node.y, to_node.x - from_node.x)
 
     def generate_final_course(self, goal_ind):
-        waypoints = [self.goal_node]
         node = self.node_list[goal_ind]
+        self.goal_node.path_x = [self.goal_node.x, node.x]
+        self.goal_node.path_y = [self.goal_node.y, node.y]
+        self.goal_node.parent = node
+        waypoints = [self.goal_node]
         while node.parent is not None:
             waypoints.append(node)
             node = node.parent
@@ -270,7 +280,7 @@ class RRTstar(RRT):
             raise ValueError("goal_node is None")
 
         self.node_list = [self.start_node]
-        for i in range(max_iter):
+        for _ in range(max_iter):
             rnd = self.sample_new_node()
             nearest_ind = self.get_nearest_node_index(self.node_list, rnd)
             new_node = self.steer(self.node_list[nearest_ind], rnd, self.expand_dis)
@@ -279,8 +289,7 @@ class RRTstar(RRT):
 
             if self.check_collision(new_node, self.obstacle_list):
                 near_inds = self.find_near_nodes(new_node)
-                node_with_updated_parent = self.choose_parent(
-                    new_node, near_inds)
+                node_with_updated_parent = self.choose_parent(new_node, near_inds)
                 if node_with_updated_parent:
                     self.rewire(node_with_updated_parent, near_inds)
                     self.node_list.append(node_with_updated_parent)
@@ -451,20 +460,24 @@ class ChanceConstrainedRRT(RRT):
             self.cost_ub = float('inf')  # Upper bound cost
             self.cost_fs = 0.0          # Cost from start
             self.childs = []
+            self.path_x = [self.x]
+            self.path_y = [self.y]
 
     def __init__(
         self,
         start_pos: np.ndarray = None, goal_pos: np.ndarray = None, start_cov: np.ndarray = None,
         start_head: float = None, motion_noise_stds: dict = {"nn": 0.1, "no": 0.0001, "on": 0.013, "oo": 0.02},
-        explore_region: list = [[0, 20], [0, 20]], known_obstacles: list = [], enlarge_range: float = 0, expand_distance: float = 3.0,
+        explore_region: list = [[0, 20], [0, 20]], known_obstacles: list = [], enlarge_range: float = 0,
+        expand_distance: float = 3.0, path_resolution: float = 1.0,
         cost_func: function = None, steer_func: function = None,
         goal_sample_rate: float = 0.3, goal_region=2.0,
         num_nearest_node: int = 6, p_safe: float = 0.99, k: float = 1.0
     ) -> None:
-        super().__init__(start_pos, goal_pos, explore_region, known_obstacles, enlarge_range, expand_distance, goal_sample_rate, 0, cost_func)
+        super().__init__(start_pos, goal_pos, explore_region, known_obstacles, enlarge_range, expand_distance, goal_sample_rate, path_resolution, cost_func)
         if start_pos is not None and goal_pos is not None and start_cov is not None:
             if start_head is None:
                 start_head = np.arctan2(goal_pos[1] - start_pos[1], goal_pos[0] - start_pos[0])
+                start_head = angle_to_range(start_head)
             self.start_node = self.Node(start_pos[0], start_pos[1], start_head, start_cov)
             self.goal_node = self.Node(goal_pos[0], goal_pos[1], None, None)
         self.num_nearest_node = num_nearest_node
@@ -476,7 +489,7 @@ class ChanceConstrainedRRT(RRT):
         self.goal_region = goal_region
         self.name = "CC-RRT"
 
-    def calculate_path(self, max_time: float = 5.0, max_iter: int = 200, *kargs) -> list:
+    def calculate_path(self, max_iter: int = 200, *kargs) -> list:
         if self.start_node is None:
             raise ValueError("start_node is None")
         if self.goal_node is None:
@@ -513,13 +526,10 @@ class ChanceConstrainedRRT(RRT):
 
     def expand_tree(self) -> None:
         trg_node = self.sample_new_node()
-        near_idxes = self.get_m_nearest_nodes_indexes(self.node_list, trg_node)
-        pruned_idxes = []
-        node_list = copy.copy(self.node_list)
-        for idx in near_idxes:
-            if idx in pruned_idxes:
+        near_nodes = self.get_m_nearest_nodes(self.node_list, trg_node)
+        for near_node in near_nodes:
+            if not near_node in self.node_list:
                 continue
-            near_node = node_list[idx]
             new_nodes, _ = self.connect_to_target(near_node, trg_node)
             for new_node in new_nodes:
                 new_node.cost_fs = new_node.parent.cost_fs + self.cost(new_node.parent, new_node)
@@ -533,17 +543,37 @@ class ChanceConstrainedRRT(RRT):
                         ub_cost += self.cost(p_node, node)
                         lb_cost = self.cost(self.goal_node, node)
                         if ub_cost < lb_cost:
-                            pruned_idxes += self.prune_childs(node, node_list)
+                            self.prune_childs(node, self.node_list)
                         node = p_node
+
+            # if len(new_nodes) != 0:
+            #     fig, ax = set_fig_params((8, 8), [0, 20], [0, 20])
+            #     x, y, theta = near_node.x, near_node.y, near_node.head
+            #     xn = x + 0.5 * np.cos(theta)
+            #     yn = y + 0.5 * np.sin(theta)
+            #     ax.plot([x, xn], [y, yn], color="b")
+            #     c = patches.Circle(xy=(x, y), radius=0.5, fill=False, color="b")
+            #     ax.add_patch(c)
+            #     for n in new_nodes:
+            #         if n.parent:
+            #             ax.plot(n.path_x, n.path_y, "black")
+            #         x, y, theta = n.x, n.y, n.head
+            #         xn = x + 0.5 * np.cos(theta)
+            #         yn = y + 0.5 * np.sin(theta)
+            #         ax.plot([x, xn], [y, yn], color="b")
+            #         c = patches.Circle(xy=(x, y), radius=0.5, fill=False, color="green")
+            #         ax.add_patch(c)
+            #     plt.show()
 
     def prune_childs(self, node: Node, node_list: list) -> None:
         pruned_idxes = []
         for child in node.childs:
             if child in self.node_list:
-                idx = node_list.index(child)
+                if child in node_list:
+                    idx = node_list.index(child)
+                    pruned_idxes.append(idx)
                 self.node_list.remove(child)
                 child.parent.childs.remove(child)
-                pruned_idxes.append(idx)
                 pruned_idxes += self.prune_childs(child, node_list)
         return pruned_idxes
 
@@ -560,43 +590,69 @@ class ChanceConstrainedRRT(RRT):
         self.sampled_pts.append(rnd)
         return rnd
 
-    def connect_to_target(self, node: Node, trg_node: Node) -> list[list[Node], bool]:
-        new_nodes = []
-        x_tk = np.array([node.x, node.y])
-        p_tk = node.cov
+    def connect_to_target(self, prev_node: Node, trg_node: Node, expand_dis=float('inf')) -> list[list[ChanceConstrainedRRT.Node], bool]:
         dist_to_trg = float('inf')
-        prev_node = node
-        while True:
-            control_inputs = self.control_inputs(np.array([node.x, node.y, node.head]), np.array([trg_node.x, trg_node.y, trg_node.head]))
-            x_tk, p_tk = self.steer(node, control_inputs)
-            dist_to_trg = math.hypot(x_tk[0] - trg_node.x, x_tk[1] - trg_node.y)
-            new_node = self.Node(x_tk[0], x_tk[1], x_tk[2], p_tk)
-            if not self.is_safe(x_tk, p_tk):
+        trg_pose = np.array([trg_node.x, trg_node.y, trg_node.head])
+        node = self.Node(prev_node.x, prev_node.y, prev_node.head, prev_node.cov)
+        self.connect_nodes(prev_node, node)
+        pose = np.array([node.x, node.y, node.head])
+        cov = node.cov
+        new_nodes = []
+
+        # fig, ax = set_fig_params((8, 8), [0, 20], [0, 20])
+        # x, y, theta = pose
+        # xn = x + 0.5 * np.cos(theta)
+        # yn = y + 0.5 * np.sin(theta)
+        # ax.plot([x, xn], [y, yn], color="b")
+        # c = patches.Circle(xy=(x, y), radius=0.5, fill=False, color="b")
+        # ax.add_patch(c)
+
+        dist = 0.0
+        while dist < expand_dis:
+            dist_to_trg = np.linalg.norm(pose[0:2] - trg_pose[0:2])
+            is_near_trg = dist_to_trg <= self.path_resolution
+            is_far_last_node = math.hypot(prev_node.x - node.x, prev_node.y - node.y) > self.path_resolution
+            if is_near_trg or is_far_last_node:
+                node.cost_lb = self.cost(node, self.goal_node)
+                self.connect_nodes(prev_node, node)
+                new_nodes.append(node)
+                prev_node = copy.copy(node)
+                # ax.plot(node.path_x, node.path_y, 'r')
+                node = self.Node(prev_node.x, prev_node.y, prev_node.head, prev_node.cov)
+                if is_near_trg:
+                    break
+
+            control_inputs = self.control_inputs(pose, trg_pose)
+            new_pose, cov = self.steer(pose, cov, control_inputs)
+            dist += np.linalg.norm(new_pose[0:2] - pose[0:2])
+            pose = new_pose
+            node.x = pose[0]
+            node.y = pose[1]
+            node.head = pose[2]
+            node.cov = cov
+            node.path_x.append(pose[0])
+            node.path_y.append(pose[1])
+
+            if not self.is_safe(np.array([node.x, node.y, node.head]), node.cov):
                 break
-            if dist_to_trg <= 0.5 * self.expand_dis:
-                # new_node.cost_fs = prev_node.cost_fs + self.cost(new_node, prev_node)
-                self.connect_nodes(prev_node, new_node)
-                new_node.path_x = [prev_node.x, new_node.x]
-                new_node.path_y = [prev_node.y, new_node.y]
-                new_node.cost_lb = self.cost(new_node, self.goal_node)
-                new_nodes.append(new_node)
-                break
-            if math.hypot(new_node.x - prev_node.x, new_node.y - prev_node.y) > 1.0:
-                # new_node.cost_fs = prev_node.cost_fs + self.cost(new_node, prev_node)
-                self.connect_nodes(prev_node, new_node)
-                new_node.path_x = [prev_node.x, new_node.x]
-                new_node.path_y = [prev_node.y, new_node.y]
-                new_node.cost_lb = self.cost(new_node, self.goal_node)
-                new_nodes.append(new_node)
-                prev_node = new_node
-            node = new_node
+        # x, y, theta = pose
+        # xn = x + 0.5 * np.cos(theta)
+        # yn = y + 0.5 * np.sin(theta)
+        # ax.plot([x, xn], [y, yn], color="b")
+        # c = patches.Circle(xy=(x, y), radius=0.5, fill=False, color="green")
+        # ax.add_patch(c)
+        # plt.show()
         return new_nodes, (dist_to_trg < self.expand_dis and len(new_nodes) > 0)
 
     def connect_nodes(self, pn: Node, cn: Node) -> None:
+        if pn.parent == cn:
+            raise Exception("pn's parent is cn")
+        if pn in cn.childs:
+            raise Exception("pn is cn's child")
         cn.parent = pn
         pn.childs.append(cn)
 
-    def get_m_nearest_nodes_indexes(self, node_list: list[Node], rnd_node: Node) -> list:
+    def get_m_nearest_nodes(self, node_list: list[Node], rnd_node: Node) -> list[ChanceConstrainedRRT.Node]:
         dist_costs = [self.dist_nodes(node, rnd_node) for node in node_list]    # rnd_nodeから各nodeへの距離
         fs_costs = [node.cost_fs for node in node_list]  # スタート地点から各nodeまでの距離
 
@@ -628,34 +684,47 @@ class ChanceConstrainedRRT(RRT):
             # if i >= self.num_nearest_node / 3:
             #     break
             # mininds.append(costs.index(d))
-        return mininds
+
+        near_nodes = []
+        for idx in mininds:
+            near_nodes.append(node_list[idx])
+        return near_nodes
 
     def select_inputs(self, cur_pose, trg_pose) -> list:
         L = 1.0
         v = 1.0
         theta = np.arctan2(trg_pose[1] - cur_pose[1], trg_pose[0] - cur_pose[0]) - cur_pose[2]
         theta = angle_to_range(theta)
-        w = 2 * v * np.sin(theta) / L
+        w = 3 * v * np.sin(theta) / L
         return v, w
+    #     trg_theta = np.arctan2(trg_pose[1] - cur_pose[1], trg_pose[0] - cur_pose[0])
+    #     trg_theta = angle_to_range(trg_theta)
+    #     theta = trg_theta - cur_pose[2]
+    #     theta = angle_to_range(theta)
+    #     if theta > np.pi / 8:
+    #         if theta > 0:
+    #             return [0.0, theta]
+    #         else:
+    #             return [0.0, -theta]
+    #     return 1.0, 0.0
 
-    def steer(self, from_node: Node, control_inputs: list[float, float]) -> Node:
+    def steer(self, prev_pose: np.ndarray, prev_cov: np.ndarray, control_inputs: list[float, float]) -> Node:
         dt = 0.5
-        prev_pose = np.array([from_node.x, from_node.y, from_node.head])
         nu, omega = control_inputs
         if abs(omega) < 1e-5:
             omega = 1e-5  # 値が0になるとゼロ割りになって計算ができないのでわずかに値を持たせる
         control_inputs = [nu, omega]
         new_pose = state_transition(prev_pose, control_inputs, dt)
-        new_cov = covariance_transition(prev_pose, from_node.cov, self.motion_noise_stds, control_inputs, dt)
+        new_cov = covariance_transition(prev_pose, prev_cov, self.motion_noise_stds, control_inputs, dt)
         return new_pose, new_cov
 
     def is_safe(self, x: np.ndarray, cov: np.ndarray) -> bool:
-        if x[0] < 0 or x[0] > 20 or x[1] < 0 or x[1] > 20:
-            return False
-        e1 = cov_to_ellipse(x[0:2], cov[0:2, 0:2], 3)
-        for obs in self.obstacle_list:
-            e2 = GeoEllipse(obs[0], obs[1], 0.0, obs[2], obs[2])
-            if ellipse_collision(e1, e2):
+        for obs in self.known_obstacles:
+            a_ij = np.array([(x[0:2] - obs.pos) / math.hypot(x[0] - obs.pos[0], x[1] - obs.pos[1])])
+            b_ij = obs.r
+            delta_x = np.array([x[0:2] - obs.pos])
+            prob_collision = (1 + math.erf((b_ij - a_ij @ delta_x.T) / math.sqrt(2 * a_ij @ cov[0:2, 0:2] @ a_ij.T))) / 2
+            if prob_collision > 1 - self.p_safe:
                 return False
         return True
 
@@ -745,6 +814,8 @@ class ChanceConstrainedRRT(RRT):
 
         draw_start(ax, self.start_pos)
         draw_goal(ax, self.goal_pos)
+
+        # self.draw_node_childs(ax, self.start_node, False)
 
         plt.show()
 
