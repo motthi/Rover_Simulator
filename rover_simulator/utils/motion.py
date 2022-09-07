@@ -17,7 +17,7 @@ def state_transition(pose: np.ndarray, control_inputs: np.ndarray, dt: float) ->
 
 
 def covariance_transition(
-    pose: np.ndarray, cov: np.ndarray, stds: tuple,
+    pose: np.ndarray, cov: np.ndarray, stds: dict,
     control_inputs: np.ndarray,
     dt: float
 ) -> np.ndarray:
@@ -28,7 +28,7 @@ def covariance_transition(
     return F.dot(cov).dot(F.T) + A.dot(M).dot(A.T)
 
 
-def matM(nu: float, omega: float, time: float, stds: tuple) -> np.ndarray:
+def matM(nu: float, omega: float, time: float, stds: dict) -> np.ndarray:
     return np.diag([
         stds["nn"]**2 * abs(nu) / time + stds["no"]**2 * abs(omega) / time,
         stds["on"]**2 * abs(nu) / time + stds["oo"]**2 * abs(omega) / time

@@ -27,8 +27,8 @@ class World():
         self.fig = None
         self.ani = None
 
-    def simulate(self):
-        for _ in tqdm(range(self.step, self.end_step)):
+    def simulate(self, steps:int=100):
+        for _ in tqdm(range(steps)):
             self.one_step()
             self.step += 1
             """
