@@ -1,20 +1,20 @@
 import cython
 import numpy as np
 cimport numpy as np
-from libc.math cimport sin, cos, acos, exp, sqrt, fabs, M_PI
-from cython import boundscheck, wraparound 
+from libc.math cimport sin, cos, acos, exp, sqrt, fabs, erf, M_PI
+from cython import boundscheck, wraparound
 
 ctypedef np.float64_t FLOAT64_T
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
+@cython.cdivision(True)
 cpdef double[:] state_transition(
     double[:] pose,
-    double[:] control_inputs,
+    FLOAT64_T nu,
+    FLOAT64_T omega,
     FLOAT64_T dt
 ):
-    cdef FLOAT64_T nu = control_inputs[0]
-    cdef FLOAT64_T omega = control_inputs[1]
     cdef FLOAT64_T t0 = pose[2]
     cdef double[:] new_pose
     new_pose = np.zeros(3)
@@ -34,15 +34,15 @@ cpdef double[:] state_transition(
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
+@cython.cdivision(True)
 cpdef double[:, :] covariance_transition(
     double[:] pose,
     double[:, :] cov,
-    stds: dict,
-    double[:] control_inputs,
+    double[:] stds,
+    FLOAT64_T nu,
+    FLOAT64_T omega,
     FLOAT64_T dt
 ):
-    cdef FLOAT64_T nu = control_inputs[0]
-    cdef FLOAT64_T omega = control_inputs[1]
     cdef FLOAT64_T theta = pose[2]
     cdef FLOAT64_T st = sin(theta)
     cdef FLOAT64_T ct = cos(theta)
@@ -61,8 +61,8 @@ cpdef double[:, :] covariance_transition(
     A22 = -nu_per_omega2 * (-ctw + ct) + nu_per_omega * dt * stw
     A32 = dt
     
-    M11 = stds["nn"]**2 * absnu_per_dt + stds["no"]**2 * absomega_per_dt
-    M22 = stds["on"]**2 * absnu_per_dt + stds["oo"]**2 * absomega_per_dt
+    M11 = stds[0]**2 * absnu_per_dt + stds[1]**2 * absomega_per_dt
+    M22 = stds[2]**2 * absnu_per_dt + stds[3]**2 * absomega_per_dt
     
     F13 = nu_per_omega * (cos(theta + omega * dt) - cos(theta))
     F23 = nu_per_omega * (sin(theta + omega * dt) - sin(theta))
@@ -78,3 +78,29 @@ cpdef double[:, :] covariance_transition(
     new_cov[2, 1] = cov[2, 1] + cov[2, 2] * F23 + A22 * A32 * M22
     new_cov[2, 2] = cov[2, 2] + A32 * A32 * M22
     return new_cov
+
+@cython.boundscheck(False)
+@cython.wraparound(False)
+@cython.cdivision(True)
+cpdef FLOAT64_T prob_collision(
+    double[:] x,
+    double[:, :] cov,
+    double[:] obs_pos,
+    FLOAT64_T obs_r,
+):
+    cdef FLOAT64_T a_ij0
+    cdef FLOAT64_T a_ij1
+    cdef FLOAT64_T b_ij = obs_r
+    cdef FLOAT64_T dist
+    cdef FLOAT64_T delta0
+    cdef FLOAT64_T a_cov
+    cdef FLOAT64_T delta1
+    cdef FLOAT64_T prob_col
+    dist = sqrt((x[0] - obs_pos[0])**2 + (x[1] - obs_pos[1])**2)
+    delta0 = x[0] - obs_pos[0]
+    delta1 = x[1] - obs_pos[1]
+    a_ij0 = delta0 / dist
+    a_ij1 = delta1 / dist
+    a_cov = a_ij0 * (cov[0, 0] * a_ij0 + cov[0, 1] * a_ij1) + a_ij1 * (cov[1, 0] * a_ij0 + cov[1, 1] * a_ij1)
+    prob_col = (1.0 + erf((b_ij - (a_ij0 * delta0 + a_ij1 * delta1)) / sqrt(2.0 * a_cov))) / 2
+    return prob_col

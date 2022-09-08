@@ -28,10 +28,21 @@ def covariance_transition(
     return F.dot(cov).dot(F.T) + A.dot(M).dot(A.T)
 
 
-def matM(nu: float, omega: float, time: float, stds: dict) -> np.ndarray:
+def matM(nu: float, omega: float, time: float, stds: np.ndarray) -> np.ndarray:
+    """Create M
+
+    Args:
+        nu (float): Control inputs
+        omega (float): Control inputs (rotate)
+        time (float): delta t
+        stds (np.ndarray): Motion noise 0: nn, 1: no, 2: on, 3: oo
+
+    Returns:
+        np.ndarray: _description_
+    """
     return np.diag([
-        stds["nn"]**2 * abs(nu) / time + stds["no"]**2 * abs(omega) / time,
-        stds["on"]**2 * abs(nu) / time + stds["oo"]**2 * abs(omega) / time
+        stds[0]**2 * abs(nu) / time + stds[1]**2 * abs(omega) / time,
+        stds[2]**2 * abs(nu) / time + stds[3]**2 * abs(omega) / time
     ])
 
 

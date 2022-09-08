@@ -1,6 +1,5 @@
 import math
 import numpy as np
-import matplotlib.pyplot as plt
 
 
 def round_off(x, digit=0):
@@ -33,11 +32,11 @@ def isInRange(angle: float, rangeMin: float, rangeMax: float):
             return False
 
 
-def angle_to_range(angle):
-    while angle > np.pi:
-        angle -= 2 * np.pi
-    while angle < -np.pi:
-        angle += 2 * np.pi
+def angle_to_range(angle:float) -> float:
+    while angle > math.pi:
+        angle -= 2 * math.pi
+    while angle < -math.pi:
+        angle += 2 * math.pi
     return angle
 
 
@@ -59,7 +58,6 @@ def updateP(p, p_):
     return lToP(l)
 
 
-
 class GeoEllipse():
     def __init__(self, x: float, y: float, angle: float, a: float, b: float) -> None:
         self.a = a
@@ -77,14 +75,14 @@ def cov_to_ellipse(x, cov, n):
 
 def ellipse_collision(e1: GeoEllipse, e2: GeoEllipse) -> bool:
     diff_ang = e1.ang - e2.ang
-    cos_diff = np.cos(diff_ang)
-    sin_diff = np.sin(diff_ang)
+    cos_diff = math.cos(diff_ang)
+    sin_diff = math.sin(diff_ang)
     nx = e2.a * cos_diff
     ny = -e2.a * sin_diff
     px = e2.b * sin_diff
     py = e2.b * cos_diff
-    ox = np.cos(e1.ang) * (e2.x - e1.x) + np.sin(e1.ang) * (e2.y - e1.y)
-    oy = -np.sin(e1.ang) * (e2.x - e1.x) + np.cos(e1.ang) * (e2.y - e1.y)
+    ox = math.cos(e1.ang) * (e2.x - e1.x) + math.sin(e1.ang) * (e2.y - e1.y)
+    oy = -math.sin(e1.ang) * (e2.x - e1.x) + math.cos(e1.ang) * (e2.y - e1.y)
 
     # STEP2 : 一般式A～Gの算出
     rx_pow2 = 1 / (e1.a * e1.a)
@@ -103,8 +101,8 @@ def ellipse_collision(e1: GeoEllipse, e2: GeoEllipse) -> bool:
     Th = 0 if (B - A) == 0 else np.arctan(D / (B - A)) * 0.5
 
     #  STEP4 : +1楕円を元に戻した式で当たり判定
-    CosTh = np.cos(Th)
-    SinTh = np.sin(Th)
+    CosTh = math.cos(Th)
+    SinTh = math.sin(Th)
     A_tt = A * CosTh * CosTh + B * SinTh * SinTh - D * CosTh * SinTh
     B_tt = A * SinTh * SinTh + B * CosTh * CosTh + D * CosTh * SinTh
     KK = A * h * h + B * k * k + D * h * k - E * h - F * k + G

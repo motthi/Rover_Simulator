@@ -10,3 +10,5 @@ sourcetrail
 *.bat
 *.jpg
 *.npz
+*.obj
+*.cp39*
