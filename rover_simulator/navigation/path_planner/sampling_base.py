@@ -521,6 +521,7 @@ class ChanceConstrainedRRT(RRT):
         self.goal_pos = goal_pos
         self.e_theta = np.arctan2(start_pos[1] - goal_pos[1], start_pos[0] - goal_pos[0])
         self.cnt = 0
+        self.dt = 0.5
         self.name = "CC-RRT"
 
     def calculate_path(self, max_iter: int = 200, *kargs) -> list:
@@ -643,8 +644,8 @@ class ChanceConstrainedRRT(RRT):
         dist = 0.0
         flag_safe = True
         while dist < expand_dis:
-            control_inputs = self.control_inputs(pose, trg_pose)
-            new_pose, cov = self.steer(pose, cov, control_inputs, 0.5)
+            nu, omega = self.control_inputs(pose, trg_pose)
+            new_pose, cov = self.steer(pose, cov, nu, omega)
             dist += math.hypot(new_pose[0] - pose[0], new_pose[1] - pose[1])
 
             if not self.is_safe(new_pose, cov):
@@ -652,11 +653,10 @@ class ChanceConstrainedRRT(RRT):
                 break
 
             node = self.update_node(node, pose, new_pose, cov)
-
             pose = new_pose
             dist_to_trg = math.hypot(pose[1] - trg_pose[1], pose[0] - trg_pose[0])
             if connect_to_end:
-                is_near_trg = dist_to_trg <= self.path_resolution * 0.1
+                is_near_trg = dist_to_trg <= self.path_resolution * 0.5
             else:
                 is_near_trg = dist_to_trg <= self.path_resolution
             is_far_last_node = math.hypot(prev_node.x - node.x, prev_node.y - node.y) > self.path_resolution
@@ -739,28 +739,20 @@ class ChanceConstrainedRRT(RRT):
         return near_nodes
 
     def select_inputs(self, cur_pose: np.ndarray, trg_pose: np.ndarray) -> list:
-        # trg_theta = np.arctan2(trg_pose[1] - cur_pose[1], trg_pose[0] - cur_pose[0])
-        # trg_theta = angle_to_range(trg_theta)
-        # theta = trg_theta - cur_pose[2]
-        # theta = angle_to_range(theta)
-        # if theta > np.pi / 8:
-        #     if theta > 0:
-        #         return [0.0, theta]
-        #     else:
-        #         return [0.0, -theta]
-        # return 1.0, 0.0
-        L = 1.0
-        v = 1.0
         theta = math.atan2(trg_pose[1] - cur_pose[1], trg_pose[0] - cur_pose[0]) - cur_pose[2]
-        w = 3 * v * math.sin(theta) / L
+        if abs(theta) > math.pi / 6:
+            v = 0.0
+            w = theta / self.dt
+        else:
+            v = 1.0
+            w = 3 * v * math.sin(theta) / 1.0
         return v, w
 
-    def steer(self, prev_pose: np.ndarray, prev_cov: np.ndarray, control_inputs: list[float, float], dt: float = 1.0) -> Node:
-        nu, omega = control_inputs
+    def steer(self, prev_pose: np.ndarray, prev_cov: np.ndarray, nu: float, omega: float) -> Node:
         if abs(omega) < 1e-5:
             omega = 1e-5  # 値が0になるとゼロ割りになって計算ができないのでわずかに値を持たせる
-        new_pose = state_transition(prev_pose, nu, omega, dt)
-        new_cov = covariance_transition(prev_pose, prev_cov, self.motion_noise_stds, nu, omega, dt)
+        new_pose = state_transition(prev_pose, nu, omega, self.dt)
+        new_cov = covariance_transition(prev_pose, prev_cov, self.motion_noise_stds, nu, omega, self.dt)
         return new_pose, new_cov
 
     def is_safe(self, x: np.ndarray, cov: np.ndarray) -> bool:
@@ -773,13 +765,6 @@ class ChanceConstrainedRRT(RRT):
             if prob_col > 1 - self.p_safe:
                 return False
         return True
-
-    def prob_col(self, x, cov, obs_pos, obs_r):
-        a_ij = np.array([(x[0:2] - obs_pos) / math.hypot(x[0] - obs_pos[0], x[1] - obs_pos[1])])
-        b_ij = obs_r
-        delta_x = np.array([x[0:2] - obs_pos])
-        prob_col = (1 + math.erf((b_ij - a_ij @ delta_x.T) / math.sqrt(2 * a_ij @ cov[0:2, 0:2] @ a_ij.T))) / 2
-        return prob_col
 
     def to_pose(self, n: ChanceConstrainedRRT.Node):
         return np.array([n.x, n.y, n.head])
@@ -934,7 +919,6 @@ class ChanceConstrainedRRTstar(ChanceConstrainedRRT):
         self.mu_xfree = (explore_region[0][1] - explore_region[0][0]) * (explore_region[1][1] - explore_region[1][0])
         for obs in known_obstacles:
             self.mu_xfree -= obs.r**2 * math.pi
-        self.cnt = 0
 
     def calculate_path(self, max_iter: int = 200, *kargs) -> list:
         return super().calculate_path(max_iter, *kargs)
