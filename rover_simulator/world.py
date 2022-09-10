@@ -8,7 +8,7 @@ import matplotlib.patches as patches
 from scipy.spatial import cKDTree
 from rover_simulator.core import*
 from rover_simulator.history import History
-from rover_simulator.utils.draw import set_fig_params, draw_rover, draw_obstacles, draw_start, draw_goal, draw_waypoints
+from rover_simulator.utils.draw import draw_poses, draw_sensing_results, set_fig_params, draw_rover, draw_obstacles, draw_start, draw_goal, draw_waypoints
 
 if 'google.colab' in sys.modules:
     from tqdm.notebook import tqdm  # Google Colaboratory
@@ -140,14 +140,12 @@ class World():
 
         for rover in self.rovers:
             if rover.history:
-                rover.history.draw_real_poses(ax, rover.color)
-                rover.history.draw_estimated_poses(ax, rover.color)
+                draw_poses(ax, rover.history.real_poses, rover.color)
+                draw_poses(ax, rover.history.estimated_poses, rover.color, linestyle=':')
                 if rover.sensor:
-                    rover.history.draw_sensing_results(ax, rover.sensor.range, rover.sensor.fov, draw_sensing_points_flag, draw_sensing_area_flag)
-
-            draw_rover(ax, rover)
-            if draw_waypoints_flag and rover.waypoints is not None:
-                draw_waypoints(ax, rover.waypoints, rover.waypoint_color)
+                    draw_sensing_results(ax, rover.real_poses, rover.sensor.range, rover.sensor.fov, rover.sensing_results, draw_sensing_points_flag, draw_sensing_area_flag)
+            draw_rover(ax, rover.real_pose, rover.r)
+            draw_waypoints(ax, rover.waypoints, rover.waypoint_color) if draw_waypoints_flag and rover.waypoints is not None else None
 
         draw_start(ax, start_pos) if start_pos is not None else None
         draw_goal(ax, goal_pos) if goal_pos is not None else None

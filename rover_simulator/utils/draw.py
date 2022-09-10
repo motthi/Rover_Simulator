@@ -40,14 +40,14 @@ def set_fig_params(figsize, xlim, ylim):
     return fig, ax
 
 
-def draw_rover(ax, rover, c=None):
-    x, y, theta = rover.real_pose
-    xn = x + rover.r * np.cos(theta)
-    yn = y + rover.r * np.sin(theta)
-    if c is None:
-        c = rover.color
+def draw_rover(ax, pose, r, color=None):
+    x, y, theta = pose
+    xn = x + r * np.cos(theta)
+    yn = y + r * np.sin(theta)
+    if color is None:
+        c = color
     ax.plot([x, xn], [y, yn], color=c)
-    c = patches.Circle(xy=(x, y), radius=rover.r, fill=False, color=c)
+    c = patches.Circle(xy=(x, y), radius=r, fill=False, color=c)
     ax.add_patch(c)
 
 
@@ -62,6 +62,38 @@ def draw_start(ax, start_pos: np.ndarray) -> None:
 
 def draw_goal(ax, goal_pos: np.ndarray) -> None:
     ax.plot(goal_pos[0], goal_pos[1], "xr")
+
+
+def draw_pose(ax, pose, color) -> None:
+    ax.plot(
+        [e[0] for e in pose],
+        [e[1] for e in pose],
+        linewidth=1.0,
+        linestyle="-",
+        color=color
+    )
+
+
+def draw_poses(ax, poses, color, linestyle="-") -> None:
+    ax.plot(
+        [e[0] for e in poses],
+        [e[1] for e in poses],
+        linewidth=1.0,
+        linestyle=linestyle,
+        color=color
+    )
+
+
+def draw_error_ellipses(ax, poses, covs, color="blue", plot_interval=10):
+    for i, (p, cov) in enumerate(zip(poses, covs)):
+        if i % plot_interval == 0:
+            e = sigma_ellipse(p[0:2], cov[0:2, 0:2], 3, color=color)
+            ax.add_patch(e)
+            x, y, c = p
+            sigma3 = math.sqrt(cov[2, 2]) * 3
+            xs = [x + math.cos(c - sigma3), x, x + math.cos(c + sigma3)]
+            ys = [y + math.sin(c - sigma3), y, y + math.sin(c + sigma3)]
+            ax.plot(xs, ys, color=color, alpha=0.5)
 
 
 def draw_waypoints(ax, waypoints: list, color) -> None:
@@ -120,3 +152,22 @@ def sigma_ellipse(p, cov, n, color="blue"):
     eig_vals, eig_vec = np.linalg.eig(cov)
     ang = math.atan2(eig_vec[:, 0][1], eig_vec[:, 0][0]) / math.pi * 180
     return Ellipse(p, width=2 * n * math.sqrt(eig_vals[0]), height=2 * n * math.sqrt(eig_vals[1]), angle=ang, fill=False, color=color, alpha=0.5, zorder=5)
+
+
+def draw_sensing_results(ax, poses, sensor_range, sensor_fov, sensing_results, draw_sensing_points_flag, draw_sensing_area_flag):
+    for i, sensing_result in enumerate(sensing_results):
+        if sensing_result is not None:
+            if draw_sensing_points_flag:
+                ax.plot(poses[i][0], poses[i][1], marker="o", c="red", ms=5)
+            if draw_sensing_area_flag:
+                x, y, theta = poses[i]
+                ax.plot(x, y, marker="o", c="red", ms=5)
+                if draw_sensing_area_flag:
+                    sensing_range = patches.Wedge(
+                        (x, y), sensor_range,
+                        theta1=np.rad2deg(theta - sensor_fov / 2),
+                        theta2=np.rad2deg(theta + sensor_fov / 2),
+                        alpha=0.5,
+                        color="mistyrose"
+                    )
+                    ax.add_patch(sensing_range)

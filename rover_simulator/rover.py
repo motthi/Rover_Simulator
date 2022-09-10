@@ -69,16 +69,16 @@ class BasicRover(Rover):
         self.mapper.update(self.estimated_pose, sensed_obstacles) if self.mapper is not None else None
 
         # Calculate Control Inputs
-        control_inputs = self.controller.calculate_control_inputs()
+        v, w = self.controller.calculate_control_inputs()
 
         # Record
         self.history.append(real_pose=self.real_pose, estimated_pose=self.estimated_pose, sensing_result=sensed_obstacles)
 
         # Move
-        self.real_pose = state_transition(self.real_pose, control_inputs, time_interval)
+        self.real_pose = state_transition(self.real_pose, v, w, time_interval)
 
         # Localization
-        self.estimated_pose = self.localizer.estimate_pose(self.estimated_pose, control_inputs, time_interval)
+        self.estimated_pose = self.localizer.estimate_pose(self.estimated_pose, v, w, time_interval)
 
 
 class DWARover(BasicRover):
@@ -125,21 +125,21 @@ class DWARover(BasicRover):
             sensed_obstacles.append(Obstacle(obs_pos, sensed_obj['radius']))
 
         # Calculate Control Inputs
-        control_inputs = self.controller.calculate_control_inputs(
+        v, w = self.controller.calculate_control_inputs(
             rover_pose=self.estimated_pose, dt=time_interval,
             goal_pose=self.waypoint, obstacles=sensed_obstacles,
             v=self.v, w=self.w,
         )
-        self.v, self.w = control_inputs
+        self.v, self.w = v, w
 
         # Record
         self.history.append(real_pose=self.real_pose, estimated_pose=self.estimated_pose, sensing_result=sensed_list, waypoints=self.waypoints)
 
         # Move
-        self.real_pose = state_transition(self.real_pose, control_inputs, time_interval)
+        self.real_pose = state_transition(self.real_pose, v, w, time_interval)
 
         # Localization
-        self.estimated_pose = self.localizer.estimate_pose(self.estimated_pose, control_inputs, time_interval)
+        self.estimated_pose = self.localizer.estimate_pose(self.estimated_pose, v, w, time_interval)
 
 
 class KalmanRover(BasicRover):
@@ -174,7 +174,7 @@ class KalmanRover(BasicRover):
         self.mapper.update(self.estimated_pose, sensed_obstacles) if self.mapper is not None else None
 
         # Calculate Control Inputs
-        control_inputs = self.controller.calculate_control_inputs()
+        v, w = self.controller.calculate_control_inputs()
 
         # Record
         self.history.append(
@@ -185,10 +185,10 @@ class KalmanRover(BasicRover):
         )
 
         # Move
-        self.real_pose = state_transition(self.real_pose, control_inputs, time_interval)
+        self.real_pose = state_transition(self.real_pose, v, w, time_interval)
 
         # Localization
-        self.estimated_pose = self.localizer.estimate_pose(self.estimated_pose, control_inputs, time_interval)
+        self.estimated_pose = self.localizer.estimate_pose(self.estimated_pose, v, w, time_interval)
 
 
 class FollowRover(DWARover):
@@ -282,7 +282,7 @@ class OnlinePathPlanningRover(DWARover):
             self.waypoint = self.waypoints[0]
 
         # Calculate Control Inputs
-        control_inputs = self.controller.calculate_control_inputs(
+        v, w = self.controller.calculate_control_inputs(
             rover_pose=self.estimated_pose, v=self.v, w=self.w, dt=time_interval,
             goal_pose=self.waypoint, obstacles=self.mapper.obstacles_table
         )
@@ -291,10 +291,10 @@ class OnlinePathPlanningRover(DWARover):
         self.history.append(real_pose=self.real_pose, estimated_pose=self.estimated_pose, sensing_result=sensed_obstacles, waypoints=self.waypoints)
 
         # Move one step
-        self.real_pose = state_transition(self.real_pose, control_inputs, time_interval)
+        self.real_pose = state_transition(self.real_pose, v, w, time_interval)
 
         # Localization
-        self.estimated_pose = self.localizer.estimate_pose(self.estimated_pose, control_inputs, time_interval)
+        self.estimated_pose = self.localizer.estimate_pose(self.estimated_pose, v, w, time_interval)
 
 
 class RoverAnimation():
