@@ -5,7 +5,9 @@ import matplotlib.patches as patches
 
 class Rover():
     def __init__(self) -> None:
-        pass
+        self.color = "black"
+        self.history = None
+        self.sensor = None
 
     def one_step(self, _) -> None:
         raise NotImplementedError

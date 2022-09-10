@@ -16,7 +16,7 @@ from rover_simulator.history import History, HistoryWithKalmanFilter
 from rover_simulator.collision_detector import IgnoreCollision
 from rover_simulator.navigation.localizer import KalmanFilter
 from rover_simulator.navigation.path_planner import PathPlanner
-from rover_simulator.navigation.controller import DWAController
+from rover_simulator.navigation.controller import DwaController
 from rover_simulator.navigation.sensing_planner import SimpleSensingPlanner
 
 if 'google.colab' in sys.modules:
@@ -86,7 +86,7 @@ class DWARover(BasicRover):
         self,
         pose: np.ndarray, radius: float,
         sensor: Sensor = None, localizer: Localizer = None, path_planner: PathPlanner = None,
-        controller: Controller = DWAController(),
+        controller: Controller = DwaController(),
         sensing_planner: SensingPlanner = None,
         mapper: Mapper = None, collision_detector: CollisionDetector = None,
         history: History = None,
@@ -196,7 +196,7 @@ class FollowRover(DWARover):
         self,
         pose: np.ndarray, radius: float,
         sensor: Sensor = None, localizer: Localizer = None, path_planner: PathPlanner = None,
-        controller: Controller = DWAController(),
+        controller: Controller = DwaController(),
         sensing_planner: SensingPlanner = None,
         mapper: Mapper = None, collision_detector: CollisionDetector = None,
         history: History = None,
@@ -232,7 +232,7 @@ class OnlinePathPlanningRover(DWARover):
         self,
         pose: np.ndarray, radius: float,
         sensor: Sensor = None, localizer: Localizer = None, path_planner: PathPlanner = None,
-        controller: Controller = DWAController(),
+        controller: Controller = DwaController(),
         sensing_planner: SensingPlanner = SimpleSensingPlanner(),
         mapper: Mapper = None, collision_detector: CollisionDetector = None,
         history: History = None,

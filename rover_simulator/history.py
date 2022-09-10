@@ -43,7 +43,8 @@ class History():
         self.steps.append(len(self.steps))
         self.real_poses.append(kwargs['real_pose'])
         self.estimated_poses.append(kwargs['estimated_pose'])
-        self.sensing_results.append(kwargs['sensing_result'])
+        if 'sensing_result' in kwargs:
+            self.sensing_results.append(kwargs['sensing_result'])
         if 'waypoints' in kwargs:
             self.waypoints.append(copy.copy(kwargs['waypoints']))
 

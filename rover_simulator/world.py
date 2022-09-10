@@ -139,10 +139,10 @@ class World():
         draw_obstacles(ax, self.obstacles, enlarge_range)
 
         for rover in self.rovers:
-            if rover.history is not None:
+            if rover.history:
                 rover.history.draw_real_poses(ax, rover.color)
                 rover.history.draw_estimated_poses(ax, rover.color)
-                if rover.sensor is not None:
+                if rover.sensor:
                     rover.history.draw_sensing_results(ax, rover.sensor.range, rover.sensor.fov, draw_sensing_points_flag, draw_sensing_area_flag)
 
             draw_rover(ax, rover)
@@ -155,14 +155,17 @@ class World():
     def animate(
         self,
         xlim: list[float], ylim: list[float],
-        start_step: int = 0, end_step: int = None,
         figsize: tuple[float, float] = (8, 8),
+        start_step: int = 0, end_step: int = None,
+        start_pos: np.ndarray = None, goal_pos: np.ndarray = None,
         enlarge_range: float = 0.0,
         draw_sensing_points: bool = False
     ) -> None:
         end_step = self.step if end_step is None else end_step
         self.fig, ax = set_fig_params(figsize, xlim, ylim)
         draw_obstacles(ax, self.obstacles, enlarge_range)
+        draw_start(ax, start_pos) if start_pos is not None else None
+        draw_goal(ax, goal_pos) if goal_pos is not None else None
         elems = []
 
         # Start Animation
@@ -220,30 +223,31 @@ class World():
             elems.append(ax.add_patch(c))
 
             # Draw History of sensing_result
-            sensed_obstacles = rover.history.sensing_results[start_step + i]
-            if not sensed_obstacles is None:
-                # Draw Sensing Point
-                ax.plot(x, y, marker="o", c="red", ms=5) if draw_sensing_points else None
+            if len(rover.history.sensing_results) > start_step + i:
+                sensed_obstacles = rover.history.sensing_results[start_step + i]
+                if not sensed_obstacles is None:
+                    # Draw Sensing Point
+                    ax.plot(x, y, marker="o", c="red", ms=5) if draw_sensing_points else None
 
-                for sensed_obstacle in sensed_obstacles:
-                    x, y, theta = rover.history.estimated_poses[start_step + i]
+                    for sensed_obstacle in sensed_obstacles:
+                        x, y, theta = rover.history.estimated_poses[start_step + i]
 
-                    distance = sensed_obstacle['distance']
-                    angle = sensed_obstacle['angle'] + theta
-                    radius = sensed_obstacle['radius']
+                        distance = sensed_obstacle['distance']
+                        angle = sensed_obstacle['angle'] + theta
+                        radius = sensed_obstacle['radius']
 
-                    # ロボットと障害物を結ぶ線を描写
-                    xn, yn = np.array([x, y]) + np.array([distance * np.cos(angle), distance * np.sin(angle)])
-                    elems += ax.plot([x, xn], [y, yn], color="mistyrose", linewidth=0.8)
+                        # ロボットと障害物を結ぶ線を描写
+                        xn, yn = np.array([x, y]) + np.array([distance * np.cos(angle), distance * np.sin(angle)])
+                        elems += ax.plot([x, xn], [y, yn], color="mistyrose", linewidth=0.8)
 
-                    # Draw Enlarged Obstacle Regions
-                    enl_obs = patches.Circle(xy=(xn, yn), radius=radius + rover.r, fc='blue', ec='blue', alpha=0.3)
-                    elems.append(ax.add_patch(enl_obs))
+                        # Draw Enlarged Obstacle Regions
+                        enl_obs = patches.Circle(xy=(xn, yn), radius=radius + rover.r, fc='blue', ec='blue', alpha=0.3)
+                        elems.append(ax.add_patch(enl_obs))
 
-                    # Draw Obstacles
-                    # for obstacle in self.obstacles:
-                    #     obs = patches.Circle(xy=(xn, yn), radius=obstacle.r, fc='blue', ec='blue', alpha=0.5)
-                    #     elems.append(ax.add_patch(obs))
+                        # Draw Obstacles
+                        # for obstacle in self.obstacles:
+                        #     obs = patches.Circle(xy=(xn, yn), radius=obstacle.r, fc='blue', ec='blue', alpha=0.5)
+                        #     elems.append(ax.add_patch(obs))
 
             # Draw History of waypoints
             if len(rover.history.waypoints) != 0:

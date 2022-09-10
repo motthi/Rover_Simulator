@@ -1,7 +1,7 @@
 import math
 import numpy as np
 from scipy.stats import norm
-from rover_simulator.utils.motion import state_transition, covariance_transition
+from rover_simulator.utils.cmotion.cmotion import state_transition, covariance_transition
 from rover_simulator.core import Localizer
 from scipy.stats import multivariate_normal
 
@@ -10,8 +10,8 @@ class ImaginalLocalizer(Localizer):
     def __init__(self) -> None:
         super().__init__()
 
-    def estimate_pose(self, previous_pose: np.ndarray, control_inputs: np.ndarray, time_interval: float):
-        return state_transition(previous_pose, control_inputs, time_interval)
+    def estimate_pose(self, previous_pose: np.ndarray, v: np.ndarray, w: np.ndarray, time_interval: float):
+        return state_transition(previous_pose, v, w, time_interval)
 
 
 class NoisyLocalizer(ImaginalLocalizer):
@@ -25,41 +25,41 @@ class NoisyLocalizer(ImaginalLocalizer):
         self.noise_theta_pdf = norm(scale=noise[1])
         self.bias = bias
 
-    def estimate_pose(self, previous_pose: np.ndarray, control_inputs: np.ndarray, time_interval: float):
-        control_inputs = self.add_noise(control_inputs)
-        control_inputs = self.add_bias(control_inputs)
-        return state_transition(previous_pose, control_inputs, time_interval)
+    def estimate_pose(self, previous_pose: np.ndarray, v: np.ndarray, w: np.ndarray, time_interval: float):
+        v, w = self.add_noise(v, w)
+        v, w = self.add_bias(v, w)
+        return state_transition(previous_pose, v, w, time_interval)
 
-    def add_noise(self, control_inputs: np.ndarray):
-        nu, omega = control_inputs
-        nu += self.noise_pose_pdf.rvs()
-        omega += self.noise_theta_pdf.rvs()
-        return np.array([nu, omega])
+    def add_noise(self, v: float, w: float):
+        v += self.noise_pose_pdf.rvs()
+        w += self.noise_theta_pdf.rvs()
+        return np.array([v, w])
 
-    def add_bias(self, control_inputs: np.ndarray):
-        nu, omega = control_inputs
-        return np.array([nu * self.bias[0], omega * self.bias[1]])
+    def add_bias(self, v: float, w: float):
+        return np.array([v * self.bias[0], w * self.bias[1]])
 
 
-def matM(nu, omega, time, stds) -> np.ndarray:
-    return np.diag([stds["nn"]**2 * abs(nu) / time + stds["no"]**2 * abs(omega) / time,
-                    stds["on"]**2 * abs(nu) / time + stds["oo"]**2 * abs(omega) / time])
-
-
-def matA(nu, omega, time, theta) -> np.ndarray:
-    st, ct = math.sin(theta), math.cos(theta)
-    stw, ctw = math.sin(theta + omega * time), math.cos(theta + omega * time)
-    return np.array([
-        [(stw - st) / omega, -nu / (omega**2) * (stw - st) + nu / omega * time * ctw],
-        [(-ctw + ct) / omega, -nu / (omega**2) * (-ctw + ct) + nu / omega * time * stw],
-        [0, time]
+def matM(v: float, w: float, dt, stds) -> np.ndarray:
+    return np.diag([
+        stds[0]**2 * abs(v) / dt + stds[1]**2 * abs(w) / dt,
+        stds[2]**2 * abs(v) / dt + stds[3]**2 * abs(w) / dt
     ])
 
 
-def matF(nu, omega, time, theta) -> np.ndarray:
+def matA(v, w, dt, theta) -> np.ndarray:
+    st, ct = math.sin(theta), math.cos(theta)
+    stw, ctw = math.sin(theta + w * dt), math.cos(theta + w * dt)
+    return np.array([
+        [(stw - st) / w, -v / (w**2) * (stw - st) + v / w * dt * ctw],
+        [(-ctw + ct) / w, -v / (w**2) * (-ctw + ct) + v / w * dt * stw],
+        [0, dt]
+    ])
+
+
+def matF(v, w, dt, theta) -> np.ndarray:
     F = np.diag([1.0, 1.0, 1.0])
-    F[0, 2] = nu / omega * (math.cos(theta + omega * time) - math.cos(theta))
-    F[1, 2] = nu / omega * (math.sin(theta + omega * time) - math.sin(theta))
+    F[0, 2] = v / w * (math.cos(theta + w * dt) - math.cos(theta))
+    F[1, 2] = v / w * (math.sin(theta + w * dt) - math.sin(theta))
     return F
 
 
@@ -83,14 +83,12 @@ class KalmanFilter:
             init_cov = np.diag([1e-10, 1e-10, 1e-10])
         self.belief = multivariate_normal(mean=init_pose, cov=init_cov)
         self.pose = self.belief.mean
-        self.motion_noise_stds = motion_noise_stds
+        self.motion_noise_stds = np.array([motion_noise_stds["nn"], motion_noise_stds["no"], motion_noise_stds["on"], motion_noise_stds["oo"]])
 
-    def estimate_pose(self, previous_pose: np.ndarray, control_inputs: np.ndarray, dt: float):
-        nu, omega = control_inputs
-        if abs(omega) < 1e-5:
-            omega = 1e-5  # 値が0になるとゼロ割りになって計算ができないのでわずかに値を持たせる
-        control_inputs = [nu, omega]
-        self.belief.cov = covariance_transition(previous_pose, self.belief.cov, self.motion_noise_stds, control_inputs, dt)
-        self.belief.mean = state_transition(previous_pose, control_inputs, dt)
+    def estimate_pose(self, previous_pose: np.ndarray, v:float, w:float, dt: float):
+        if abs(w) < 1e-5:
+            w = 1e-5  # 値が0になるとゼロ割りになって計算ができないのでわずかに値を持たせる
+        self.belief.cov = covariance_transition(previous_pose, self.belief.cov, self.motion_noise_stds, v, w, dt)
+        self.belief.mean = state_transition(previous_pose, v, w, dt)
         self.pose = self.belief.mean
         return self.pose

@@ -33,7 +33,7 @@ class PurePursuitController(Controller):
         return self.v, w
 
 
-class DWAController(Controller):
+class DwaController(Controller):
     def __init__(
         self,
         nu_range: List[float] = [-1.0, 2.0],
@@ -162,7 +162,7 @@ class DWAController(Controller):
         return 1.0 / min_r  # OK
 
 
-class PathFollower(DWAController):
+class PathFollower(DwaController):
     def __init__(
         self,
         nu_range: List[float] = [-1.0, 2.0],
