@@ -1,3 +1,4 @@
+from __future__ import annotations
 import re
 import sys
 import numpy as np
@@ -5,9 +6,9 @@ import matplotlib.animation as anm
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from scipy.spatial import cKDTree
-from typing import List, Tuple
 from rover_simulator.core import*
-from rover_simulator.utils.draw import set_fig_params, draw_obstacles, draw_start, draw_goal
+from rover_simulator.history import History
+from rover_simulator.utils.draw import set_fig_params, draw_rover, draw_obstacles, draw_start, draw_goal, draw_waypoints
 
 if 'google.colab' in sys.modules:
     from tqdm.notebook import tqdm  # Google Colaboratory
@@ -18,16 +19,15 @@ else:
 
 
 class World():
-    def __init__(self, time_interval: float = 0.1, end_step: int = 10) -> None:
+    def __init__(self, time_interval: float = 0.1) -> None:
         self.rovers = []
         self.obstacles = []
         self.step = 0
         self.time_interval = time_interval
-        self.end_step = end_step
         self.fig = None
         self.ani = None
 
-    def simulate(self, steps:int=100):
+    def simulate(self, steps: int = 100):
         for _ in tqdm(range(steps)):
             self.one_step()
             self.step += 1
@@ -96,12 +96,12 @@ class World():
     def append_obstacle(self, obstacle: Obstacle):
         self.obstacles.append(obstacle)
 
-    def set_random_start_goal(
+    def set_start_goal_ramdomly(
         self,
-        x_range: List[float] = [0, 20], y_range: List[float] = [0, 20],
+        x_range: list[float] = [0, 20], y_range: list[float] = [0, 20],
         min_distnace: float = 0.0, max_distance: float = 20,
         enlarged_obstacle=0.0
-    ) -> List[np.ndarray]:
+    ) -> list[np.ndarray]:
         if min_distnace > max_distance:
             raise ValueError("min_distance must be lower than max_distance")
         distance = -1.0
@@ -117,128 +117,72 @@ class World():
                 is_collision = True
             else:
                 is_collision = False
-
         return start_pos, goal_pos
 
-    def reset_world(self, reset_step: bool = True, reset_rovers: bool = True, reset_obstacles: bool = True):
+    def reset(self, reset_step: bool = True, reset_rovers: bool = True, reset_obstacles: bool = True):
         self.step = 0 if reset_step is True else self.step
         self.rovers = [] if reset_rovers is True else self.rovers
         self.obstacles = [] if reset_obstacles is True else self.obstacles
 
-    def reset(self):
-        self.step = 0
-        self.rovers = []
-        self.obstacles = []
-
-    def plot(
+    def draw(
         self,
-        xlim: List[float], ylim: List[float],
-        figsize: Tuple[float, float] = (8, 8),
+        xlim: list[float], ylim: list[float],
+        figsize: tuple[float, float] = (8, 8),
         start_pos: np.ndarray = None,
         goal_pos: np.ndarray = None,
         enlarge_range: float = 0.0,
-        draw_waypoints: bool = False,
-        draw_sensing_points: bool = True,
-        draw_sensing_area: bool = False
+        draw_waypoints_flag: bool = False,
+        draw_sensing_points_flag: bool = False,
+        draw_sensing_area_flag: bool = False
     ):
         self.fig, ax = set_fig_params(figsize, xlim, ylim)
         draw_obstacles(ax, self.obstacles, enlarge_range)
 
         for rover in self.rovers:
             if rover.history is not None:
-                # Draw History of real_pose
-                ax.plot(
-                    [e[0] for e in rover.history.real_poses],
-                    [e[1] for e in rover.history.real_poses],
-                    linewidth=1.0,
-                    color=rover.color
-                )
-                # Draw History of estimated_pose
-                ax.plot(
-                    [e[0] for e in rover.history.estimated_poses],
-                    [e[1] for e in rover.history.estimated_poses],
-                    linewidth=1.0,
-                    linestyle=":",
-                    color=rover.color
-                )
+                rover.history.draw_real_poses(ax, rover.color)
+                rover.history.draw_estimated_poses(ax, rover.color)
+                if rover.sensor is not None:
+                    rover.history.draw_sensing_results(ax, rover.sensor.range, rover.sensor.fov, draw_sensing_points_flag, draw_sensing_area_flag)
 
-                for i, sensing_result in enumerate(rover.history.sensing_results):
-                    if sensing_result is not None and draw_sensing_points:
-                        x, y, theta = rover.history.estimated_poses[i]
-                        ax.plot(x, y, marker="o", c="red", ms=5)
-                        if draw_sensing_area:
-                            sensing_range = patches.Wedge(
-                                (x, y), rover.sensor.range,
-                                theta1=np.rad2deg(theta - rover.sensor.fov / 2),
-                                theta2=np.rad2deg(theta + rover.sensor.fov / 2),
-                                alpha=0.5,
-                                color="mistyrose"
-                            )
-                            ax.add_patch(sensing_range)
+            draw_rover(ax, rover)
+            if draw_waypoints_flag and rover.waypoints is not None:
+                draw_waypoints(ax, rover.waypoints, rover.waypoint_color)
 
-            # Draw Last Rover Position
-            x, y, theta = rover.real_pose
-            xn = x + rover.r * np.cos(theta)
-            yn = y + rover.r * np.sin(theta)
-            ax.plot([x, xn], [y, yn], color=rover.color)
-            c = patches.Circle(xy=(x, y), radius=rover.r, fill=False, color=rover.color)
-            ax.add_patch(c)
-
-            # Draw Waypoints if draw_waypoints is True
-            if draw_waypoints:
-                if rover.waypoints is not None:
-                    ax.plot(
-                        [e[0] for e in rover.waypoints],
-                        [e[1] for e in rover.waypoints],
-                        linewidth=1.0,
-                        linestyle="-",
-                        color=rover.waypoint_color
-                    )
-
-        if start_pos is not None:
-            draw_start(ax, start_pos)
-        if goal_pos is not None:
-            draw_goal(ax, goal_pos)
+        draw_start(ax, start_pos) if start_pos is not None else None
+        draw_goal(ax, goal_pos) if goal_pos is not None else None
 
     def animate(
         self,
-        xlim: List[float], ylim: List[float],
+        xlim: list[float], ylim: list[float],
         start_step: int = 0, end_step: int = None,
-        figsize: Tuple[float, float] = (8, 8),
-        enlarge_obstacle: float = 0.0,
-        save_path: str = None,
-        debug: bool = False,
-        draw_sensing_points: bool = True
+        figsize: tuple[float, float] = (8, 8),
+        enlarge_range: float = 0.0,
+        draw_sensing_points: bool = False
     ) -> None:
         end_step = self.step if end_step is None else end_step
         self.fig, ax = set_fig_params(figsize, xlim, ylim)
-        draw_obstacles(ax, self.obstacles, enlarge_obstacle)
+        draw_obstacles(ax, self.obstacles, enlarge_range)
         elems = []
 
         # Start Animation
         pbar = tqdm(total=end_step - start_step)
-        if debug is True:
-            for i in range(end_step - start_step):
-                self.animate_one_step(i, ax, elems, start_step, pbar, draw_sensing_points)
-        else:
-            self.ani = anm.FuncAnimation(
-                self.fig, self.animate_one_step, fargs=(ax, elems, start_step, pbar, draw_sensing_points),
-                frames=end_step - start_step, interval=int(self.time_interval * 1000),
-                repeat=False
-            )
-            plt.show()
-        if save_path is not None:
-            self.ani.save(save_path, writer='ffmpeg')
+        self.ani = anm.FuncAnimation(
+            self.fig, self.animate_one_step, fargs=(ax, xlim, ylim, elems, start_step, pbar, draw_sensing_points),
+            frames=end_step - start_step, interval=int(self.time_interval * 1000),
+            repeat=False
+        )
+        plt.close()
 
-    def animate_one_step(self, i, ax, elems, start_step, pbar, draw_sensing_points):
+    def animate_one_step(self, i, ax, xlim, ylim, elems: list, start_step, pbar, draw_sensing_points):
         while elems:
             elems.pop().remove()
 
         time_str = "t = %.2f[s]" % (self.time_interval * (start_step + i))
         elems.append(
             ax.text(
-                self.xlim[0] * 0.01,
-                self.ylim[1] * 1.02,
+                xlim[0] * 0.01,
+                ylim[1] * 1.02,
                 time_str,
                 fontsize=10
             )
@@ -314,3 +258,9 @@ class World():
                 )
 
         pbar.update(1) if not pbar is None else None
+
+    def save_animation(self, src, writer='ffmpeg'):
+        if self.ani:
+            self.ani.save(src, writer=writer)
+        else:
+            raise Exception("Animation is not created.")

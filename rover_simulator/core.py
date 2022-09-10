@@ -1,5 +1,6 @@
 from __future__ import annotations
 import numpy as np
+import matplotlib.patches as patches
 
 
 class Rover():
@@ -47,6 +48,12 @@ class Obstacle():
         self.pos = position
         self.r = radius
         self.type = type
+
+    def draw(self, ax, enlarge_range, alpha) -> None:
+        enl_obs = patches.Circle(xy=(self.pos[0], self.pos[1]), radius=self.r + enlarge_range, fc='black', ec='black', zorder=-1.0, alpha=alpha)
+        ax.add_patch(enl_obs)
+        # obs = patches.Circle(xy=(self.pos[0], self.pos[1]), radius=self.r, fc='black', ec='black', zorder=-1.0, alpha=alpha)
+        # ax.add_patch(obs)
 
 
 class CollisionDetector:

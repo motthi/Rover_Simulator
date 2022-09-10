@@ -47,7 +47,7 @@ class History():
         if 'waypoints' in kwargs:
             self.waypoints.append(copy.copy(kwargs['waypoints']))
 
-    def plot(
+    def draw(
         self,
         xlim: list[float], ylim: list[float],
         figsize: tuple[float, float] = (8, 8),
@@ -120,6 +120,38 @@ class History():
                     linestyle="-",
                     color=self.waypoint_color
                 )
+
+    def draw_real_poses(self, ax, color):
+        ax.plot(
+            [e[0] for e in self.real_poses],
+            [e[1] for e in self.real_poses],
+            linewidth=1.0,
+            color=color
+        )
+
+    def draw_estimated_poses(self, ax, color):
+        ax.plot(
+            [e[0] for e in self.estimated_poses],
+            [e[1] for e in self.estimated_poses],
+            linewidth=1.0,
+            linestyle=":",
+            color=color
+        )
+
+    def draw_sensing_results(self, ax, sensor_range, sensor_fov, draw_sensing_points_flag, draw_sensing_area_flag):
+        for i, sensing_result in enumerate(self.sensing_results):
+            if sensing_result is not None and draw_sensing_points_flag:
+                x, y, theta = self.estimated_poses[i]
+                ax.plot(x, y, marker="o", c="red", ms=5)
+                if draw_sensing_area_flag:
+                    sensing_range = patches.Wedge(
+                        (x, y), sensor_range,
+                        theta1=np.rad2deg(theta - sensor_fov / 2),
+                        theta2=np.rad2deg(theta + sensor_fov / 2),
+                        alpha=0.5,
+                        color="mistyrose"
+                    )
+                    ax.add_patch(sensing_range)
 
     def animate(
         self,
@@ -247,7 +279,7 @@ class HistoryWithKalmanFilter(History):
         super().append(*args, **kwargs)
         self.estimated_poses_cov.append(kwargs['estimated_pose_cov'])
 
-    def plot(
+    def draw(
         self,
         xlim: list[float], ylim: list[float],
         figsize: tuple[float, float] = (8, 8),

@@ -40,13 +40,20 @@ def set_fig_params(figsize, xlim, ylim):
     return fig, ax
 
 
+def draw_rover(ax, rover, c=None):
+    x, y, theta = rover.real_pose
+    xn = x + rover.r * np.cos(theta)
+    yn = y + rover.r * np.sin(theta)
+    if c is None:
+        c = rover.color
+    ax.plot([x, xn], [y, yn], color=c)
+    c = patches.Circle(xy=(x, y), radius=rover.r, fill=False, color=c)
+    ax.add_patch(c)
+
+
 def draw_obstacles(ax, obstacles, enlarge_range, alpha=1.0):
     for obstacle in obstacles:
-        enl_obs = patches.Circle(xy=(obstacle.pos[0], obstacle.pos[1]), radius=obstacle.r + enlarge_range, fc='black', ec='black', zorder=-1.0, alpha=alpha)
-        ax.add_patch(enl_obs)
-    for obstacle in obstacles:
-        obs = patches.Circle(xy=(obstacle.pos[0], obstacle.pos[1]), radius=obstacle.r, fc='black', ec='black', zorder=-1.0, alpha=alpha)
-        ax.add_patch(obs)
+        obstacle.draw(ax, enlarge_range, alpha)
 
 
 def draw_start(ax, start_pos: np.ndarray) -> None:
@@ -55,6 +62,16 @@ def draw_start(ax, start_pos: np.ndarray) -> None:
 
 def draw_goal(ax, goal_pos: np.ndarray) -> None:
     ax.plot(goal_pos[0], goal_pos[1], "xr")
+
+
+def draw_waypoints(ax, waypoints: list, color) -> None:
+    ax.plot(
+        [e[0] for e in waypoints],
+        [e[1] for e in waypoints],
+        linewidth=1.0,
+        linestyle="-",
+        color=color
+    )
 
 
 def draw_grid(idx: np.ndarray, grid_width: float, color: str, alpha: float, ax, elems=None, fill=True) -> None:
