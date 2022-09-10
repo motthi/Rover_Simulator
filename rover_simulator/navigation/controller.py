@@ -114,7 +114,7 @@ class DwaController(Controller):
         trajectory = np.array(x)
         time = 0
         while time <= self.predict_time:
-            pose = state_transition(x[0:3], [x[3], x[4]], dt)
+            pose = state_transition(x[0:3], x[3], x[4], dt)
             x = np.append(pose, [x[3], x[4]])
             # if obstacles_kdTree is not None:
             #     indices = obstacles_kdTree.query_ball_point(x[0:2], r=4.0)

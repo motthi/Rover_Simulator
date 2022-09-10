@@ -6,7 +6,6 @@ import matplotlib.pyplot as plt
 from scipy.spatial import cKDTree
 from rover_simulator.navigation.path_planner import PathPlanner
 from rover_simulator.utils.utils import angle_to_range
-# from rover_simulator.utils.motion import state_transition, covariance_transition
 from rover_simulator.utils.cmotion.cmotion import state_transition, covariance_transition, prob_collision
 from rover_simulator.utils.draw import set_fig_params, draw_obstacles, draw_start, draw_goal, sigma_ellipse
 
@@ -76,8 +75,7 @@ class RRT(PathPlanner):
         self.node_list = [self.start_node]
         for _ in range(max_iter):
             rnd_node = self.sample_new_node()
-            nearest_ind = self.get_nearest_node_index(self.node_list, rnd_node)
-            nearest_node = self.node_list[nearest_ind]
+            nearest_node = self.get_nearest_node(self.node_list, rnd_node)
 
             new_node = self.steer(nearest_node, rnd_node, self.expand_dis)
             if self.check_collision(new_node, self.obstacle_list):
@@ -307,10 +305,9 @@ class RRTstar(RRT):
         self.node_list = [self.start_node]
         for _ in range(max_iter):
             rnd = self.sample_new_node()
-            nearest_ind = self.get_nearest_node_index(self.node_list, rnd)
-            new_node = self.steer(self.node_list[nearest_ind], rnd, self.expand_dis)
-            near_node = self.node_list[nearest_ind]
-            new_node.cost = near_node.cost + self.cost(self.to_pose(new_node), self.to_pose(near_node))
+            nearest_node = self.get_nearest_node(self.node_list, rnd)
+            new_node = self.steer(nearest_node, rnd, self.expand_dis)
+            new_node.cost = nearest_node.cost + self.cost(self.to_pose(new_node), self.to_pose(nearest_node))
 
             if self.check_collision(new_node, self.obstacle_list):
                 near_inds = self.find_near_nodes(new_node)
@@ -522,6 +519,8 @@ class ChanceConstrainedRRT(RRT):
         self.e_theta = np.arctan2(start_pos[1] - goal_pos[1], start_pos[0] - goal_pos[0])
         self.cnt = 0
         self.dt = 0.5
+        self.start_cov = start_cov
+        self.start_head = start_head
         self.name = "CC-RRT"
 
     def calculate_path(self, max_iter: int = 200, *kargs) -> list:
@@ -571,7 +570,7 @@ class ChanceConstrainedRRT(RRT):
 
     def expand_tree(self) -> None:
         trg_node = self.sample_new_node()
-        near_nodes = self.get_m_nearest_nodes(self.node_list, trg_node)
+        near_nodes = self.get_m_nearest_nodes(self.node_list, trg_node, self.num_nearest_node)
         for near_node in near_nodes:
             if not near_node in self.node_list:
                 continue
@@ -700,7 +699,7 @@ class ChanceConstrainedRRT(RRT):
         cn.parent = None
         pn.childs.remove(cn)
 
-    def get_m_nearest_nodes(self, node_list: list[Node], rnd_node: Node) -> list[ChanceConstrainedRRT.Node]:
+    def get_m_nearest_nodes(self, node_list: list[Node], rnd_node: Node, m: int) -> list[ChanceConstrainedRRT.Node]:
         dist_costs = [self.dist_nodes(self.to_pose(node), self.to_pose(rnd_node)) for node in node_list]    # rnd_nodeから各nodeへの距離
         fs_costs = [node.cost_fs for node in node_list]  # スタート地点から各nodeまでの距離
 
@@ -711,7 +710,7 @@ class ChanceConstrainedRRT(RRT):
         costs_sorted = sorted(costs)
         mininds = []
         for i, d in enumerate(costs_sorted):
-            if i >= self.num_nearest_node:
+            if i >= m:
                 break
             mininds.append(costs.index(d))
 
@@ -925,8 +924,14 @@ class ChanceConstrainedRRTstar(ChanceConstrainedRRT):
 
     def expand_tree(self) -> None:
         trg_node = self.sample_new_node()
-        nearest_node = self.get_nearest_node(self.node_list, trg_node)
-        nodes_min, succeed = self.connect_to_target(nearest_node, trg_node, connect_to_end=True)
+        # nearest_node = self.get_nearest_node(self.node_list, trg_node)
+
+        # 一番近い3つのノードの近い順から検証する
+        near_m_nodes = self.get_m_nearest_nodes(self.node_list, trg_node, 3)
+        for n in near_m_nodes:
+            nodes_min, succeed = self.connect_to_target(n, trg_node, connect_to_end=True)
+            if succeed:
+                break
         if succeed:
             cost_min = nodes_min[-1].cost_fs
             near_nodes = self.get_near_nodes_except_nearest(self.node_list, trg_node)
