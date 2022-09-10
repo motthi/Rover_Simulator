@@ -176,10 +176,24 @@ class RRT(PathPlanner):
         return np.array([n.x, n.y])
 
     def save_log(self, src: str) -> None:
-        num_node = len(self.node_list)
+        nodes_npzf = self.to_npz_format(self.node_list)
+        np.savez(
+            src,
+            num_node=nodes_npzf['num_node'],
+            node_pos=nodes_npzf['node_pos'],
+            num_path=nodes_npzf['num_path'],
+            node_path_x=nodes_npzf['node_path_x'],
+            node_path_y=nodes_npzf['node_path_y'],
+            node_costs=nodes_npzf['node_costs'],
+            parents_idx=nodes_npzf['parents_idx']
+        )
+
+    def to_npz_format(self, node_list: list) -> dict:
+        num_node = len(node_list)
         node_pos = np.array([np.array([n.x, n.y]) for n in self.node_list])
         node_costs = np.array([n.cost for n in self.node_list])
         parents_idx = []
+        num_path = []
         node_path_x = []
         node_path_y = []
         for n in self.node_list:
@@ -187,30 +201,39 @@ class RRT(PathPlanner):
                 parents_idx.append(-1)
             else:
                 parents_idx.append(self.node_list.index(n.parent))
-            if len(n.path_x) == 0:
-                node_path_x.append(np.array([np.inf, np.inf]))
-            else:
-                node_path_x.append(np.array([n.path_x[0], n.path_x[-1]]))
-            if len(n.path_y) == 0:
-                node_path_y.append(np.array([np.inf, np.inf]))
-            else:
-                node_path_y.append(np.array([n.path_y[0], n.path_y[-1]]))
-        np.savez(src, num_node=num_node, node_pos=node_pos, node_path_x=node_path_x, node_path_y=node_path_y, node_costs=node_costs, parents_idx=parents_idx)
+            num_path.append(len(n.path_x))
+            node_path_x += n.path_x
+            node_path_y += n.path_y
+        return {
+            'num_node': num_node,
+            'node_pos': node_pos,
+            'node_path_x': node_path_x,
+            'node_path_y': node_path_y,
+            'node_costs': node_costs,
+            'parents_idx': parents_idx,
+            'num_path': num_path
+        }
 
     def load_log(self, src: str) -> None:
         log = np.load(src)
         num_node = log['num_node']
+        num_path = log['num_path']
         node_pos = log['node_pos']
         node_path_x = log['node_path_x']
         node_path_y = log['node_path_y']
         node_costs = log['node_costs']
         node_parents_idx = log['parents_idx']
+        path_cnt = 0
         for i in range(num_node):
-            self.node_list.append(self.Node(node_pos[i][0], node_pos[i][1]))
+            n = self.Node(node_pos[i][0], node_pos[i][1])
+            n.path_x = node_path_x[path_cnt:path_cnt + num_path[i]]
+            n.path_y = node_path_y[path_cnt:path_cnt + num_path[i]]
+            n.cost = node_costs[i]
+            self.node_list.append(n)
+            path_cnt += num_path[i]
+
+        # Set parent
         for i in range(num_node):
-            self.node_list[i].path_x = node_path_x[i] if np.sum(np.isinf(node_path_x[i])) == 0 else []
-            self.node_list[i].path_y = node_path_y[i] if np.sum(np.isinf(node_path_y[i])) == 0 else []
-            self.node_list[i].cost = node_costs[i]
             if node_parents_idx[i] == -1:
                 self.node_list[i].parent = None
             else:
@@ -460,6 +483,7 @@ class ChanceConstrainedRRT(RRT):
             self.head = head
             self.cov = cov
             self.parent = None
+            self.cost = float('inf')    # Not used, for compatibility with RRT
             self.cost_lb = float('inf')         # Lower bound cost
             self.cost_ub = float('inf')  # Upper bound cost
             self.cost_fs = 0.0          # Cost from start
@@ -760,52 +784,60 @@ class ChanceConstrainedRRT(RRT):
     def to_pose(self, n: ChanceConstrainedRRT.Node):
         return np.array([n.x, n.y, n.head])
 
+    def to_npz_format(self, node_list: list) -> dict:
+        nodes_npzf = super().to_npz_format(node_list)
+        nodes_npzf['node_head'] = np.array([n.head for n in self.node_list])
+        nodes_npzf['node_cov'] = np.array([n.cov for n in self.node_list])
+        nodes_npzf['node_lb_costs'] = np.array([n.cost_lb for n in self.node_list])
+        nodes_npzf['node_ub_costs'] = np.array([n.cost_ub for n in self.node_list])
+        nodes_npzf['node_fs_costs'] = np.array([n.cost_fs for n in self.node_list])
+        return nodes_npzf
+
     def save_log(self, src: str) -> None:
-        num_node = len(self.node_list)
-        node_pos = np.array([np.array([n.x, n.y]) for n in self.node_list])
-        node_head = np.array([n.head for n in self.node_list])
-        node_cov = np.array([n.cov for n in self.node_list])
-        node_lb_costs = np.array([n.cost_lb for n in self.node_list])
-        node_ub_costs = np.array([n.cost_ub for n in self.node_list])
-        node_fs_costs = np.array([n.cost_fs for n in self.node_list])
-        parents_idx = []
-        node_path_x = []
-        node_path_y = []
-        for n in self.node_list:
-            if n.parent is None:
-                parents_idx.append(-1)
-            else:
-                parents_idx.append(self.node_list.index(n.parent))
-            if len(n.path_x) == 0:
-                node_path_x.append(np.array([np.inf, np.inf]))
-            else:
-                node_path_x.append(np.array([n.path_x[0], n.path_x[-1]]))
-            if len(n.path_y) == 0:
-                node_path_y.append(np.array([np.inf, np.inf]))
-            else:
-                node_path_y.append(np.array([n.path_y[0], n.path_y[-1]]))
-        np.savez(src, num_node=num_node, node_pos=node_pos, node_head=node_head, node_cov=node_cov, node_lb_costs=node_lb_costs, node_ub_costs=node_ub_costs, node_fs_costs=node_fs_costs, parents_idx=parents_idx, node_path_x=node_path_x, node_path_y=node_path_y)
+        nodes_npzf = self.to_npz_format(self.node_list)
+        np.savez(
+            src,
+            num_node=nodes_npzf['num_node'],
+            node_pos=nodes_npzf['node_pos'],
+            node_head=nodes_npzf['node_head'],
+            node_cov=nodes_npzf['node_cov'],
+            node_lb_costs=nodes_npzf['node_lb_costs'],
+            node_ub_costs=nodes_npzf['node_ub_costs'],
+            node_fs_costs=nodes_npzf['node_fs_costs'],
+            num_path=nodes_npzf['num_path'],
+            node_path_x=nodes_npzf['node_path_x'],
+            node_path_y=nodes_npzf['node_path_y'],
+            node_costs=nodes_npzf['node_costs'],
+            parents_idx=nodes_npzf['parents_idx'],
+
+        )
 
     def load_log(self, src: str) -> None:
         log = np.load(src)
         num_node = log['num_node']
+        num_path = log['num_path']
         node_pos = log['node_pos']
         node_path_x = log['node_path_x']
         node_path_y = log['node_path_y']
         node_head = log['node_head']
         node_cov = log['node_cov']
+        node_costs = log['node_costs']
         node_lb_costs = log['node_lb_costs']
         node_ub_costs = log['node_ub_costs']
         node_fs_costs = log['node_fs_costs']
         node_parents_idx = log['parents_idx']
+        path_cnt = 0
         for i in range(num_node):
-            self.node_list.append(self.Node(node_pos[i][0], node_pos[i][1], node_head[i], node_cov[i]))
+            n = self.Node(node_pos[i][0], node_pos[i][1], node_head[i], node_cov[i])
+            n.path_x = node_path_x[path_cnt:path_cnt + num_path[i]]
+            n.path_y = node_path_y[path_cnt:path_cnt + num_path[i]]
+            n.cost_lb = node_lb_costs[i]
+            n.cost_ub = node_ub_costs[i]
+            n.cost_fs = node_fs_costs[i]
+            n.cost = node_costs[i]
+            self.node_list.append(n)
+            path_cnt += num_path[i]
         for i in range(num_node):
-            self.node_list[i].path_x = node_path_x[i] if np.sum(np.isinf(node_path_x[i])) == 0 else []
-            self.node_list[i].path_y = node_path_y[i] if np.sum(np.isinf(node_path_y[i])) == 0 else []
-            self.node_list[i].cost_lb = node_lb_costs[i]
-            self.node_list[i].cost_ub = node_ub_costs[i]
-            self.node_list[i].cost_fs = node_fs_costs[i]
             if node_parents_idx[i] == -1:
                 self.node_list[i].parent = None
             else:
