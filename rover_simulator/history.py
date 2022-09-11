@@ -61,7 +61,7 @@ class SimpleHistory(History):
             real_poses=np.array(self.real_poses),
             estimated_poses=np.array(self.estimated_poses),
             # sensing_results = np.array(self.sensing_results),
-            waypoints=np.array(self.waypoints),
+            waypoints=self.waypoints,
             sensor_range=self.sensor_range,
             sensor_fov=self.sensor_fov,
             time_interval=self.time_interval,
