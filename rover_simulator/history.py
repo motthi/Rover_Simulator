@@ -6,8 +6,8 @@ import numpy as np
 import matplotlib.animation as anm
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
-from rover_simulator.core import Obstacle
-from rover_simulator.utils.draw import draw_error_ellipses, draw_obstacles, draw_pose, draw_poses, draw_rover, draw_sensing_results, sigma_ellipse, set_fig_params
+from rover_simulator.core import Obstacle, History
+from rover_simulator.utils.draw import *
 
 if 'google.colab' in sys.modules:
     from tqdm.notebook import tqdm  # Google Colaboratory
@@ -17,7 +17,13 @@ else:
     from tqdm import tqdm    # ipython, python script, ...
 
 
-class History():
+class SimpleHistory(History):
+    real_poses: list
+    estimated_poses: list
+    waypoints: list
+    sensing_results: list
+    waypoint_color: str
+
     def __init__(
         self,
         time_interval: float = 0.1,
@@ -48,6 +54,36 @@ class History():
         if 'waypoints' in kwargs:
             self.waypoints.append(copy.copy(kwargs['waypoints']))
 
+    def save(self, src) -> None:
+        np.savez(
+            src,
+            steps=np.array(self.steps),
+            real_poses=np.array(self.real_poses),
+            estimated_poses=np.array(self.estimated_poses),
+            # sensing_results = np.array(self.sensing_results),
+            waypoints=np.array(self.waypoints),
+            sensor_range=self.sensor_range,
+            sensor_fov=self.sensor_fov,
+            time_interval=self.time_interval,
+            rover_r=self.rover_r,
+            rover_color=self.rover_color,
+            waypoint_color=self.waypoint_color
+        )
+
+    def load(self, src) -> None:
+        data = np.load(src, allow_pickle=True)
+        self.stesp = list(data['steps'])
+        self.real_poses = data['real_poses']
+        self.estimated_poses = data['estimated_poses']
+        # self.sensing_results = list(data['sensing_results'])
+        self.waypoints = data['waypoints']
+        self.sensor_range = data['sensor_range'].item()
+        self.sensor_fov = data['sensor_fov'].item()
+        self.time_interval = data['time_interval'].item()
+        self.rover_r = data['rover_r'].item()
+        self.rover_color = data['rover_color'].item()
+        self.waypoint_color = data['waypoint_color'].item()
+
     def draw(
         self,
         xlim: list[float], ylim: list[float],
@@ -65,9 +101,8 @@ class History():
         draw_rover(ax, self.real_poses[-1], self.rover_r, self.rover_color)  # Last rover position and angle
         draw_rover(ax, self.estimated_poses[-1], self.rover_r, self.rover_color)  # Last rover position and angle
 
-        # Draw History of real_pose
-        draw_poses(ax, self.real_poses)
-        draw_poses(ax, self.estimated_poses, linestyle=":")
+        draw_poses(ax, self.real_poses, self.rover_color)
+        draw_poses(ax, self.estimated_poses, self.rover_color, linestyle=":")
 
         # Draw Waypoints if draw_waypoints is True
         draw_pose(ax, self.waypoints[-1], self.waypoint_color) if draw_waypoints_flag and self.waypoints is not None else None
@@ -75,119 +110,61 @@ class History():
     def animate(
         self,
         xlim: list[float], ylim: list[float],
-        start_step: int = 0, end_step: int = None,
         figsize: tuple[float, float] = (8, 8),
+        start_step: int = 0, end_step: int = None,
+        start_pos: np.ndarray = None, goal_pos: np.ndarray = None,
         obstacles: list[Obstacle] = [],
-        enlarge_obstacle: float = 0.0,
-        save_path: str = None,
-        debug: bool = False
+        enlarge_range: float = 0.0,
+        draw_waypoints_flag: bool = False,
+        draw_sensing_results_flag: bool = False,
+        draw_sensing_points_flag: bool = True,
+        draw_sensing_area_flag: bool = True
     ) -> None:
         end_step = len(self.steps) if end_step is None else end_step
         end_step = end_step if end_step > len(self.steps) else len(self.steps)
         self.fig, ax = set_fig_params(figsize, xlim, ylim)
-        draw_obstacles(ax, obstacles, enlarge_obstacle)
+        draw_obstacles(ax, obstacles, enlarge_range)
+        draw_start(ax, start_pos) if start_pos is not None else None
+        draw_goal(ax, goal_pos) if goal_pos is not None else None
 
         elems = []
 
         # Start Animation
         pbar = tqdm(total=end_step - start_step)
-        if debug is True:
-            for i in range(end_step - start_step):
-                self.animate_one_step(i, ax, elems, start_step, pbar)
-        else:
-            self.ani = anm.FuncAnimation(
-                self.fig, self.animate_one_step, fargs=(ax, elems, start_step, pbar),
-                frames=end_step - start_step, interval=int(self.time_interval * 1000),
-                repeat=False
-            )
-            plt.show()
-        if save_path is not None:
-            self.ani.save(save_path, writer='ffmpeg')
+        self.ani = anm.FuncAnimation(
+            self.fig, self.animate_one_step, fargs=(ax, xlim, ylim, elems, start_step, draw_waypoints_flag, draw_sensing_results_flag, draw_sensing_points_flag, draw_sensing_area_flag, pbar),
+            frames=end_step - start_step, interval=int(self.time_interval * 1000),
+            repeat=False
+        )
+        plt.close()
 
-    def animate_one_step(self, i, ax, elems, start_step, pbar):
+    def animate_one_step(self, i: int, ax, xlim: list, ylim: list, elems: list, start_step: int, draw_waypoints_flag: bool, draw_sensing_results_flag: bool, draw_sensing_points_flag: bool, draw_sensing_area_flag: bool, pbar):
         while elems:
             elems.pop().remove()
 
         time_str = "t = %.2f[s]" % (self.time_interval * (start_step + i))
         elems.append(
             ax.text(
-                self.xlim[0] * 0.01,
-                self.ylim[1] * 1.02,
+                xlim[0] * 0.01,
+                ylim[1] * 1.02,
                 time_str,
                 fontsize=10
             )
         )
 
-        # Draw History of sensing_result
         real_pose = self.real_poses[start_step + i]
-        sensed_obstacles = self.sensing_results[start_step + i]
         estimated_pose = self.estimated_poses[start_step + i]
-        if not sensed_obstacles is None:
-            ax.plot(real_pose[0], real_pose[1], marker="o", c="red", ms=5)
-            sensing_range = patches.Wedge(
-                (real_pose[0], real_pose[1]), self.sensor_range,
-                theta1=np.rad2deg(real_pose[2] - self.sensor_fov / 2),
-                theta2=np.rad2deg(real_pose[2] + self.sensor_fov / 2),
-                alpha=0.5,
-                color="mistyrose"
-            )
-            elems.append(ax.add_patch(sensing_range))
-
-            for sensed_obstacle in sensed_obstacles:
-                distance = sensed_obstacle['distance']
-                angle = sensed_obstacle['angle'] + estimated_pose[2]
-                radius = sensed_obstacle['radius']
-
-                # ロボットと障害物を結ぶ線を描写
-                xn, yn = np.array(estimated_pose[0:2]) + np.array([distance * np.cos(angle), distance * np.sin(angle)])
-                elems += ax.plot([estimated_pose[0], xn], [estimated_pose[1], yn], color="mistyrose", linewidth=0.8)
-
-                # Draw Enlarged Obstacle Regions
-                enl_obs = patches.Circle(xy=(xn, yn), radius=radius + self.rover_r, fc='blue', ec='blue', alpha=0.3)
-                elems.append(ax.add_patch(enl_obs))
-
-        # Draw History of waypoints
-        if len(self.waypoints) != 0:
-            waypoints = self.waypoints[start_step + i]
-            elems += ax.plot(
-                [e[0] for e in waypoints],
-                [e[1] for e in waypoints],
-                linewidth=1.0,
-                linestyle=":",
-                color="blue",
-                alpha=0.5
-            )
-
-        # Draw History of estimated_pose
-        xn, yn = estimated_pose[0:2] + self.rover_r * np.array([np.cos(estimated_pose[2]), np.sin(estimated_pose[2])])
-        elems += ax.plot([estimated_pose[0], xn], [estimated_pose[1], yn], color=self.rover_color, alpha=0.5)
-        elems += ax.plot(
-            [e[0] for e in self.estimated_poses[start_step:start_step + i + 1]],
-            [e[1] for e in self.estimated_poses[start_step:start_step + i + 1]],
-            linewidth=1.0,
-            linestyle=":",
-            color=self.rover_color,
-            alpha=0.5
-        )
-        c = patches.Circle(xy=(estimated_pose[0], estimated_pose[1]), radius=self.rover_r, fill=False, color=self.rover_color, alpha=0.5)
-        elems.append(ax.add_patch(c))
-
-        # Draw History of real_pose
-        xn, yn = real_pose[0:2] + self.rover_r * np.array([np.cos(real_pose[2]), np.sin(real_pose[2])])
-        elems += ax.plot([real_pose[0], xn], [real_pose[1], yn], color=self.rover_color)
-        elems += ax.plot(
-            [e[0] for e in self.real_poses[start_step:start_step + i + 1]],
-            [e[1] for e in self.real_poses[start_step:start_step + i + 1]],
-            linewidth=1.0,
-            color=self.rover_color
-        )
-        c = patches.Circle(xy=(real_pose[0], real_pose[1]), radius=self.rover_r, fill=False, color=self.rover_color)
-        elems.append(ax.add_patch(c))
-
+        if draw_sensing_results_flag:
+            sensed_obstacles = self.sensing_results[start_step + i]
+            if not sensed_obstacles is None:
+                draw_history_sensing_results(ax, elems, real_pose, estimated_pose, sensed_obstacles, self.rover_r, self.sensor_range, self.sensor_fov, draw_sensing_points_flag, draw_sensing_area_flag)
+        draw_history_waypoints(ax, elems, self.waypoints, start_step + i) if draw_waypoints_flag and len(self.waypoints) != 0 else None
+        draw_history_pose(ax, elems, self.estimated_poses, self.rover_r, self.rover_color, i, start_step)
+        draw_history_pose(ax, elems, self.real_poses, self.rover_r, self.rover_color, i, start_step)
         pbar.update(1) if not pbar is None else None
 
 
-class HistoryWithKalmanFilter(History):
+class HistoryWithKalmanFilter(SimpleHistory):
     def __init__(self, time_interval: float = 0.1, rover_r: float = 0.5, sensor_range: float = 10, sensor_fov: float = np.pi / 2, rover_color: str = 'black', waypoint_color: str = 'blue') -> None:
         super().__init__(time_interval, rover_r, sensor_range, sensor_fov, rover_color, waypoint_color)
         self.estimated_covs = []
@@ -196,6 +173,38 @@ class HistoryWithKalmanFilter(History):
         super().append(*args, **kwargs)
         self.estimated_covs.append(kwargs['estimated_pose_cov'])
 
+    def save(self, src) -> None:
+        np.savez(
+            src,
+            steps=np.array(self.steps),
+            real_poses=np.array(self.real_poses),
+            estimated_poses=np.array(self.estimated_poses),
+            estimated_covs=np.array(self.estimated_covs),
+            # sensing_results = np.array(self.sensing_results),
+            waypoints=np.array(self.waypoints),
+            sensor_range=self.sensor_range,
+            sensor_fov=self.sensor_fov,
+            time_interval=self.time_interval,
+            rover_r=self.rover_r,
+            rover_color=self.rover_color,
+            waypoint_color=self.waypoint_color
+        )
+
+    def load(self, src) -> None:
+        data = np.load(src, allow_pickle=True)
+        self.stesp = list(data['steps'])
+        self.real_poses = data['real_poses']
+        self.estimated_poses = data['estimated_poses']
+        self.estimated_covs = data['estimated_covs']
+        # self.sensing_results = list(data['sensing_results'])
+        self.waypoints = data['waypoints']
+        self.sensor_range = data['sensor_range'].item()
+        self.sensor_fov = data['sensor_fov'].item()
+        self.time_interval = data['time_interval'].item()
+        self.rover_r = data['rover_r'].item()
+        self.rover_color = data['rover_color'].item()
+        self.waypoint_color = data['waypoint_color'].item()
+
     def draw(
         self,
         xlim: list[float], ylim: list[float],
@@ -203,115 +212,76 @@ class HistoryWithKalmanFilter(History):
         obstacles: list[Obstacle] = [],
         enlarge_range: float = 0.0,
         draw_waypoints_flag: bool = False,
+        draw_error_ellipse_flag: bool = True,
+        draw_sensing_results_flag: bool = False,
         draw_sensing_points_flag: bool = False,
         draw_sensing_area_flag: bool = False,
-        draw_error_ellipse_flag: bool = False,
         plot_step_uncertainty: int = 20
     ):
         self.fig, ax = set_fig_params(figsize, xlim, ylim)
         draw_obstacles(ax, obstacles, enlarge_range)
 
-        draw_sensing_results(ax, self.real_poses, self.sensor_range, self.sensor_fov, self.sensing_results, draw_sensing_points_flag, draw_sensing_area_flag)
-        # draw_rover(ax, self.real_poses[-1], self.rover_r, self.rover_color)  # Last rover position and angle
+        draw_sensing_results(ax, self.real_poses, self.sensor_range, self.sensor_fov, self.sensing_results, draw_sensing_points_flag, draw_sensing_area_flag) if draw_sensing_results_flag else None
+        draw_rover(ax, self.real_poses[-1], self.rover_r, self.rover_color)  # Last rover position and angle
         draw_rover(ax, self.estimated_poses[-1], self.rover_r, self.rover_color)  # Last rover position and angle
-
-        # Draw History of estimated_pose
+        draw_poses(ax, self.real_poses, self.rover_color, linestyle="-")
         draw_poses(ax, self.estimated_poses, self.rover_color, linestyle=":")
         draw_error_ellipses(ax, self.estimated_poses, self.estimated_covs, "blue", plot_step_uncertainty) if draw_error_ellipse_flag else None
         draw_pose(ax, self.waypoints[-1], self.waypoint_color) if draw_waypoints_flag and self.waypoints is not None else None
 
-    def animate_one_step(self, i, ax, elems, start_step, pbar):
+    def animate(
+        self,
+        xlim: list[float], ylim: list[float],
+        figsize: tuple[float, float] = (8, 8),
+        start_step: int = 0, end_step: int = None,
+        start_pos: np.ndarray = None, goal_pos: np.ndarray = None,
+        obstacles: list[Obstacle] = [],
+        enlarge_range: float = 0.0,
+        draw_waypoints_flag: bool = False,
+        draw_error_ellipse_flag: bool = True,
+        draw_sensing_results_flag: bool = False,
+        draw_sensing_points_flag: bool = True,
+        draw_sensing_area_flag: bool = True,
+    ) -> None:
+        end_step = len(self.steps) if end_step is None else end_step
+        end_step = end_step if end_step > len(self.steps) else len(self.steps)
+        self.fig, ax = set_fig_params(figsize, xlim, ylim)
+        draw_obstacles(ax, obstacles, enlarge_range)
+        draw_start(ax, start_pos) if start_pos is not None else None
+        draw_goal(ax, goal_pos) if goal_pos is not None else None
+
+        elems = []
+
+        # Start Animation
+        pbar = tqdm(total=end_step - start_step)
+        self.ani = anm.FuncAnimation(
+            self.fig, self.animate_one_step, fargs=(ax, xlim, ylim, elems, start_step, draw_waypoints_flag, draw_error_ellipse_flag, draw_sensing_results_flag, draw_sensing_points_flag, draw_sensing_area_flag, pbar),
+            frames=end_step - start_step, interval=int(self.time_interval * 1000),
+            repeat=False
+        )
+        plt.close()
+
+    def animate_one_step(self, i: int, ax, xlim: list, ylim: list, elems: list, start_step: int, draw_waypoints_flag: bool, draw_error_ellipse_flag: bool, draw_sensing_results_flag: bool, draw_sensing_points_flag: bool, draw_sensing_area_flag: bool, pbar):
         while elems:
             elems.pop().remove()
 
         time_str = "t = %.2f[s]" % (self.time_interval * (start_step + i))
         elems.append(
             ax.text(
-                self.xlim[0] * 0.01,
-                self.ylim[1] * 1.02,
+                xlim[0] * 0.01,
+                ylim[1] * 1.02,
                 time_str,
                 fontsize=10
             )
         )
 
-        # Draw History of sensing_result
         real_pose = self.real_poses[start_step + i]
-        sensed_obstacles = self.sensing_results[start_step + i]
         estimated_pose = self.estimated_poses[start_step + i]
-        estimated_pose_cov = self.estimated_covs[start_step + i]
-        if not sensed_obstacles is None:
-            ax.plot(real_pose[0], real_pose[1], marker="o", c="red", ms=5)
-
-            ax.plot(real_pose[0], real_pose[1], marker="o", c="red", ms=5)
-            sensing_range = patches.Wedge(
-                (real_pose[0], real_pose[1]), self.sensor_range,
-                theta1=np.rad2deg(real_pose[2] - self.sensor_fov / 2),
-                theta2=np.rad2deg(real_pose[2] + self.sensor_fov / 2),
-                alpha=0.5,
-                color="mistyrose"
-            )
-            elems.append(ax.add_patch(sensing_range))
-
-            for sensed_obstacle in sensed_obstacles:
-                distance = sensed_obstacle['distance']
-                angle = sensed_obstacle['angle'] + estimated_pose[2]
-                radius = sensed_obstacle['radius']
-
-                # ロボットと障害物を結ぶ線を描写
-                xn, yn = np.array(estimated_pose[0:2]) + np.array([distance * np.cos(angle), distance * np.sin(angle)])
-                elems += ax.plot([estimated_pose[0], xn], [estimated_pose[1], yn], color="mistyrose", linewidth=0.8)
-
-                # Draw Enlarged Obstacle Regions
-                enl_obs = patches.Circle(xy=(xn, yn), radius=radius + self.rover_r, fc='blue', ec='blue', alpha=0.3)
-                elems.append(ax.add_patch(enl_obs))
-
-        # Draw History of waypoints
-        if len(self.waypoints) != 0:
-            waypoints = self.waypoints[start_step + i]
-            elems += ax.plot(
-                [e[0] for e in waypoints],
-                [e[1] for e in waypoints],
-                linewidth=1.0,
-                linestyle=":",
-                color="blue",
-                alpha=0.5
-            )
-
-        # Draw History of estimated_pose
-        xn, yn = estimated_pose[0:2] + self.rover_r * np.array([np.cos(estimated_pose[2]), np.sin(estimated_pose[2])])
-        elems += ax.plot([estimated_pose[0], xn], [estimated_pose[1], yn], color=self.rover_color, alpha=0.5)
-        elems += ax.plot(
-            [e[0] for e in self.estimated_poses[start_step:start_step + i + 1]],
-            [e[1] for e in self.estimated_poses[start_step:start_step + i + 1]],
-            linewidth=1.0,
-            linestyle=":",
-            color=self.rover_color,
-            alpha=0.5
-        )
-        cir = patches.Circle(xy=(estimated_pose[0], estimated_pose[1]), radius=self.rover_r, fill=False, color=self.rover_color, alpha=0.5)
-        elems.append(ax.add_patch(cir))
-
-        p = estimated_pose
-        cov = estimated_pose_cov
-        e = sigma_ellipse(p[0:2], cov[0:2, 0:2], 3)
-        elems.append(ax.add_patch(e))
-
-        x, y, c = p
-        sigma3 = math.sqrt(cov[2, 2]) * 3
-        xs = [x + math.cos(c - sigma3), x, x + math.cos(c + sigma3)]
-        ys = [y + math.sin(c - sigma3), y, y + math.sin(c + sigma3)]
-        elems += ax.plot(xs, ys, color="blue", alpha=0.5)
-
-        # Draw History of real_pose
-        xn, yn = real_pose[0:2] + self.rover_r * np.array([np.cos(real_pose[2]), np.sin(real_pose[2])])
-        elems += ax.plot([real_pose[0], xn], [real_pose[1], yn], color=self.rover_color)
-        elems += ax.plot(
-            [e[0] for e in self.real_poses[start_step:start_step + i + 1]],
-            [e[1] for e in self.real_poses[start_step:start_step + i + 1]],
-            linewidth=1.0,
-            color=self.rover_color
-        )
-        c = patches.Circle(xy=(real_pose[0], real_pose[1]), radius=self.rover_r, fill=False, color=self.rover_color)
-        elems.append(ax.add_patch(c))
-
+        if draw_sensing_results_flag:
+            sensed_obstacles = self.sensing_results[start_step + i]
+            if not sensed_obstacles is None:
+                draw_history_sensing_results(ax, elems, real_pose, estimated_pose, sensed_obstacles, self.rover_r, self.sensor_range, self.sensor_fov, draw_sensing_points_flag, draw_sensing_area_flag)
+        draw_history_waypoints(ax, elems, self.waypoints, start_step + i) if draw_waypoints_flag and len(self.waypoints) != 0 else None
+        draw_history_pose_with_error_ellipse(ax, elems, self.estimated_poses, self.estimated_covs, self.rover_r, self.rover_color, "blue", i, start_step) if draw_error_ellipse_flag else None
+        draw_history_pose(ax, elems, self.real_poses, self.rover_r, self.rover_color, i, start_step)
         pbar.update(1) if not pbar is None else None

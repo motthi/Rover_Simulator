@@ -81,7 +81,7 @@ class BasicRover(Rover):
         self.estimated_pose = self.localizer.estimate_pose(self.estimated_pose, v, w, time_interval)
 
 
-class DWARover(BasicRover):
+class DwaRover(BasicRover):
     def __init__(
         self,
         pose: np.ndarray, radius: float,
@@ -191,7 +191,7 @@ class KalmanRover(BasicRover):
         self.estimated_pose = self.localizer.estimate_pose(self.estimated_pose, v, w, time_interval)
 
 
-class FollowRover(DWARover):
+class FollowRover(DwaRover):
     def __init__(
         self,
         pose: np.ndarray, radius: float,
@@ -227,7 +227,7 @@ class FollowRover(DWARover):
         super().one_step(time_interval)
 
 
-class OnlinePathPlanningRover(DWARover):
+class OnlinePathPlanningRover(DwaRover):
     def __init__(
         self,
         pose: np.ndarray, radius: float,

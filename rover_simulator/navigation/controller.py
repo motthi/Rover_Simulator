@@ -267,7 +267,7 @@ class ArcPathController(Controller):
                 x = np.array(x)
                 traj = np.array(x)
                 for _ in range(self.branch_depth):
-                    pose = state_transition(x[0:3], [v, w], dt)
+                    pose = state_transition(x[0:3], v, w, dt)
                     x = np.append(pose, [v, w])
 
                     # Collision Check

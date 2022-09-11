@@ -4,10 +4,17 @@ import matplotlib.patches as patches
 
 
 class Rover():
+    r: float
+    real_pose: np.ndarray
+    estimated_pose: np.ndarray
+    history: History
+    sensor: Sensor
+    sensing_results: list
+    waypoints: list
+    waypoint_color: str
+
     def __init__(self) -> None:
         self.color = "black"
-        self.history = None
-        self.sensor = None
 
     def one_step(self, _) -> None:
         raise NotImplementedError
@@ -22,6 +29,9 @@ class Localizer():
 
 
 class Sensor():
+    range: float
+    fov: float
+
     def __init__(self) -> None:
         pass
 
@@ -72,3 +82,20 @@ class SensingPlanner():
 
     def decide(self, *args, **kwargs) -> None:
         return True
+
+
+class History():
+    real_poses: list
+    estimated_poses: list
+    waypoints: list
+    sensing_results: list
+    waypoint_color: str
+
+    def __init__(self):
+        pass
+
+    def draw(self):
+        raise NotImplementedError
+
+    def append(self):
+        raise NotImplementedError
