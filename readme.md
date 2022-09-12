@@ -1,0 +1,25 @@
+# Rover Simulator
+
+## How to use
+
+### Install
+
+1. Clone this repository
+2. `cd ./rover_simulator/utils/cmotion`
+3. `python3 setup.py build_ext --inplace`
+
+### Try sample code
+
+Sample codes is located at `./tests` directory.
+
+## Requirements
+
+## Module
+
+- numpy
+- matplotlib
+- scipy
+- tqdm
+- cython
+- opencv-python
+- opencv-contrib-python
