@@ -8,9 +8,9 @@
 2. `cd ./rover_simulator/utils/cmotion`
 3. `python3 setup.py build_ext --inplace`
 
-### Try sample code
+### Try sample codes
 
-Sample codes is located at `./tests` directory.
+Sample codes are located at `./tests` directory.
 
 ## Requirements
 
