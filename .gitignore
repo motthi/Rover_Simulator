@@ -12,3 +12,5 @@ sourcetrail
 *.npz
 *.obj
 *.cp39*
+*.o
+*.so

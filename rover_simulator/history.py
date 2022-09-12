@@ -1,11 +1,9 @@
 from __future__ import annotations
 import sys
-import math
 import copy
 import numpy as np
 import matplotlib.animation as anm
 import matplotlib.pyplot as plt
-import matplotlib.patches as patches
 from rover_simulator.core import Obstacle, History
 from rover_simulator.utils.draw import *
 

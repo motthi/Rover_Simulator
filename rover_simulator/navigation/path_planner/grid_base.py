@@ -4,7 +4,6 @@ import cv2
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
-from typing import List, Tuple
 from rover_simulator.core import Mapper, Obstacle
 from rover_simulator.navigation.mapper import GridMapper
 from rover_simulator.navigation.path_planner import PathPlanner, PathNotFoundError
@@ -247,9 +246,9 @@ class Dijkstra(GridBasePathPlanning):
 
     def draw(
         self,
-        xlim: List[float], ylim: List[float],
-        figsize: Tuple[float, float] = (8, 8),
-        obstacles: List[Obstacle] = [],
+        xlim: list[float], ylim: list[float],
+        figsize: tuple[float, float] = (8, 8),
+        obstacles: list[Obstacle] = [],
         map_name: str = 'cost',
         enlarge_range: float = 0.0,
         draw_map=True,
@@ -566,10 +565,10 @@ class DstarLite(GridBasePathPlanning):
 
     def draw(
         self,
-        xlim: List[float], ylim: List[float],
-        figsize: Tuple[float, float] = (8, 8),
+        xlim: list[float], ylim: list[float],
+        figsize: tuple[float, float] = (8, 8),
         map_name: str = 'cost',
-        obstacles: List[Obstacle] = [],
+        obstacles: list[Obstacle] = [],
         enlarge_range: float = 0.0,
         draw_map: bool = True,
         draw_contour: bool = True
@@ -1051,10 +1050,10 @@ class FieldDstar(GridBasePathPlanning):
 
     def draw(
         self,
-        xlim: List[float], ylim: List[float],
-        figsize: Tuple[float, float] = (8, 8),
+        xlim: list[float], ylim: list[float],
+        figsize: tuple[float, float] = (8, 8),
         map_name: str = 'cost',
-        obstacles: List[Obstacle] = [],
+        obstacles: list[Obstacle] = [],
         enlarge_range: float = 0.0,
     ):
         self.fig, ax = set_fig_params(figsize, xlim, ylim)

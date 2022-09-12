@@ -1,8 +1,5 @@
 from __future__ import annotations
-import cv2
 import numpy as np
-import matplotlib.pyplot as plt
-import matplotlib.patches as patches
 from scipy.spatial import cKDTree
 from rover_simulator.core import Mapper, Sensor, Obstacle
 from rover_simulator.utils.utils import isInRange, angle_to_range, isInList, round_off

@@ -4,7 +4,6 @@ import sys
 import numpy as np
 import matplotlib.animation as anm
 import matplotlib.pyplot as plt
-import matplotlib.patches as patches
 from scipy.spatial import cKDTree
 from rover_simulator.core import*
 from rover_simulator.utils.draw import *

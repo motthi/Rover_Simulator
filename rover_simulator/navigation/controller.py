@@ -1,6 +1,5 @@
 import math
 import numpy as np
-from typing import List
 from scipy.spatial import cKDTree
 from rover_simulator.core import Controller, Obstacle
 from rover_simulator.utils.utils import angle_to_range
@@ -36,8 +35,8 @@ class PurePursuitController(Controller):
 class DwaController(Controller):
     def __init__(
         self,
-        nu_range: List[float] = [-1.0, 2.0],
-        omega_range: List[float] = [-120 * np.pi / 180, 120 * np.pi / 180],
+        nu_range: list[float] = [-1.0, 2.0],
+        omega_range: list[float] = [-120 * np.pi / 180, 120 * np.pi / 180],
         nu_delta: float = 0.1,
         omega_delta: float = 30 * np.pi / 180,
         nu_max_acc: float = 0.3,
@@ -71,7 +70,7 @@ class DwaController(Controller):
         rover_pose: np.ndarray,
         v: float, w: float, dt: float,
         goal_pose: np.ndarray,
-        obstacles: List[Obstacle]
+        obstacles: list[Obstacle]
     ):
         min_cost = float("inf")
         best_u = [0.0, 0.0]
@@ -165,8 +164,8 @@ class DwaController(Controller):
 class PathFollower(DwaController):
     def __init__(
         self,
-        nu_range: List[float] = [-1.0, 2.0],
-        omega_range: List[float] = [-120 * np.pi / 180, 120 * np.pi / 180],
+        nu_range: list[float] = [-1.0, 2.0],
+        omega_range: list[float] = [-120 * np.pi / 180, 120 * np.pi / 180],
         nu_delta: float = 0.1,
         omega_delta: float = 30 * np.pi / 180,
         nu_max_acc: float = 0.3,
@@ -192,7 +191,7 @@ class PathFollower(DwaController):
         rover_pose: np.ndarray,
         v: float, w: float, dt: float,
         goal_pose: np.ndarray,
-        obstacles: List[Obstacle],
+        obstacles: list[Obstacle],
         *args, **kwargs
     ):
         angle_to_goal = np.arctan2(goal_pose[1] - rover_pose[1], goal_pose[0] - rover_pose[0]) - rover_pose[2]
@@ -211,8 +210,8 @@ class PathFollower(DwaController):
 class ArcPathController(Controller):
     def __init__(
         self,
-        v_range: List[float] = [0.0, 2.0],
-        w_range: List[float] = [-2 * np.pi, 2 * np.pi],
+        v_range: list[float] = [0.0, 2.0],
+        w_range: list[float] = [-2 * np.pi, 2 * np.pi],
         dv: float = 0.5,
         branch_num: int = 11,
         branch_depth: int = 5,
@@ -244,7 +243,7 @@ class ArcPathController(Controller):
         rover_pose: np.ndarray,
         dt: float,
         goal_pose: np.ndarray,
-        obstacles: List[Obstacle],
+        obstacles: list[Obstacle],
         *args, **kwargs
     ):
         min_cost = float("inf")
