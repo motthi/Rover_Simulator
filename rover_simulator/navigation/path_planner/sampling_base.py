@@ -617,8 +617,11 @@ class ChanceConstrainedRRT(RRT):
             while not_safe:
                 xp[0] = random.uniform(self.explore_x_min, self.explore_x_max)
                 xp[1] = random.uniform(self.explore_y_min, self.explore_y_max)
-                dist, idx = self.obstacle_kdTree.query(xp)
-                if dist > self.known_obstacles[idx].r + 0.5:
+                if len(self.known_obstacles) > 0:
+                    dist, idx = self.obstacle_kdTree.query(xp)
+                    if dist > self.known_obstacles[idx].r + 0.5:
+                        not_safe = False
+                else:
                     not_safe = False
             rnd = self.Node(xp[0], xp[1])
         else:
