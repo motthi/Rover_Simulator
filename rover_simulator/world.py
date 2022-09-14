@@ -178,16 +178,15 @@ class World():
         )
         plt.close()
 
-    def animate_one_step(self, i: int, ax, xlim: list, ylim: list, elems: list, start_step: int, draw_waypoints_flag: bool, draw_sensing_points_flag: bool, draw_sensing_area_flag: bool, pbar):
+    def animate_one_step(self, i: int, ax, xlim: list, ylim: list, elems: list, start_step: int, draw_waypoints_flag: bool, draw_sensing_points_flag: bool, draw_sensing_area_flag: bool, pbar:tqdm):
         while elems:
             elems.pop().remove()
 
-        time_str = "t = %.2f[s]" % (self.time_interval * (start_step + i))
         elems.append(
             ax.text(
                 xlim[0] * 0.01,
                 ylim[1] * 1.02,
-                time_str,
+                f"t = {self.time_interval * (start_step + i)}[s]" % (),
                 fontsize=10
             )
         )

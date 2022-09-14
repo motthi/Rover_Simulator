@@ -29,9 +29,12 @@ environment_cmap = LinearSegmentedColormap(
 )
 
 
-def set_fig_params(figsize, xlim, ylim):
+def set_fig_params(figsize:tuple, xlim:list, ylim:list, axes_setting:list=None):
     fig = plt.figure(figsize=figsize)
-    ax = fig.add_subplot(111)
+    if axes_setting:
+        ax = fig.add_axes(axes_setting)
+    else:
+        ax = fig.add_subplot(111)
     ax.set_aspect('equal')
     ax.set_xlim(xlim[0], xlim[1])
     ax.set_ylim(ylim[0], ylim[1])
@@ -40,8 +43,12 @@ def set_fig_params(figsize, xlim, ylim):
     return fig, ax
 
 
-def save_fig(src, fig):
-    fig.savefig(src, bbox_inches="tight", pad_inches=0.05)
+def save_fig(src, fig, dpi=300):
+    fig.savefig(src, dpi=dpi, bbox_inches="tight", pad_inches=0.05)
+
+
+def save_ani(src, ani, dpi=300):
+    ani.save(src, dpi=dpi)
 
 
 def draw_rover(ax, pose, r, color=None):

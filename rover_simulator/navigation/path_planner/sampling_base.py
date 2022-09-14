@@ -1,13 +1,23 @@
 from __future__ import annotations
+import sys
+import copy
 import random
 import math
 import numpy as np
+import matplotlib.animation as anm
 import matplotlib.pyplot as plt
 from scipy.spatial import cKDTree
 from rover_simulator.navigation.path_planner import PathPlanner
 from rover_simulator.utils.utils import angle_to_range
 from rover_simulator.utils.cmotion.cmotion import state_transition, covariance_transition, prob_collision
 from rover_simulator.utils.draw import set_fig_params, draw_obstacles, draw_start, draw_goal, sigma_ellipse
+
+if 'google.colab' in sys.modules:
+    from tqdm.notebook import tqdm  # Google Colaboratory
+elif 'ipykernel' in sys.modules:
+    from tqdm.notebook import tqdm    # Jupyter Notebook
+else:
+    from tqdm import tqdm    # ipython, python script, ...
 
 
 class RRT(PathPlanner):
@@ -114,7 +124,7 @@ class RRT(PathPlanner):
         return new_node
 
     def sample_new_node(self) -> Node:
-        if random.randint(0, 1) > self.goal_sample_rate:
+        if random.random() > self.goal_sample_rate:
             rnd = self.Node(
                 random.uniform(self.explore_x_min, self.explore_x_max),
                 random.uniform(self.explore_y_min, self.explore_y_max)
@@ -265,6 +275,52 @@ class RRT(PathPlanner):
         draw_goal(ax, self.goal_pos)
         plt.show()
 
+    def animate(
+        self,
+        xlim: list[float], ylim: list[float],
+        figsize: tuple[float, float] = (8, 8),
+        enlarge_range: float = 0.0,
+        end_step=None,
+        axes_setting: list = [0.09, 0.07, 0.85, 0.9]
+    ) -> None:
+        self.fig, ax = set_fig_params(figsize, xlim, ylim, axes_setting)
+        draw_obstacles(ax, self.known_obstacles, enlarge_range)
+        draw_start(ax, self.start_pos)
+        draw_goal(ax, self.goal_pos)
+        elems = []
+
+        # Start Animation
+        if end_step:
+            animation_len = end_step
+        else:
+            animation_len = len(self.node_list) + 20
+        pbar = tqdm(total=animation_len)
+        self.ani = anm.FuncAnimation(
+            self.fig, self.animate_one_step, fargs=(ax, elems, xlim, ylim, pbar),
+            frames=animation_len, interval=100,
+            repeat=False
+        )
+        plt.close()
+
+    def animate_one_step(self, i: int, ax, elems: list, xlim: list, ylim: list, pbar: tqdm):
+        while elems:
+            elems.pop().remove()
+
+        elems.append(
+            ax.text(
+                xlim[0] * 0.01,
+                ylim[1] * 1.02,
+                f"steps = {i}",
+                fontsize=10
+            )
+        )
+        if i <= len(self.node_list) - 1:
+            node = self.node_list[i]
+            ax.plot(node.path_x, node.path_y, c="cyan")
+        elif i == len(self.node_list):
+            self.draw_path(ax)
+        pbar.update(1)
+
 
 class RRTstar(RRT):
     def __init__(
@@ -290,19 +346,18 @@ class RRTstar(RRT):
         super().__init__(start_pos, goal_pos, explore_region, known_obstacles, enlarge_range, expand_distance, path_resolution, goal_sample_rate, cost_func)
         self.connect_circle_dist = connect_circle_dist
         self.search_until_max_iter = search_until_max_iter
+        self.nodes_history = []
+        self.path_history = []
         self.name = "RRTstar"
 
-    def calculate_path(self, max_iter=500, animation=False, *kargs):
-        """
-        rrt star path planning
-        animation: flag for animation on or off .
-        """
+    def calculate_path(self, max_iter=500, log_history=False, *kargs):
         if self.start_node is None:
             raise ValueError("start_node is None")
         if self.goal_node is None:
             raise ValueError("goal_node is None")
 
         self.node_list = [self.start_node]
+        self.nodes_history.append(copy.deepcopy(self.node_list)) if log_history is True else None
         for _ in range(max_iter):
             rnd = self.sample_new_node()
             nearest_node = self.get_nearest_node(self.node_list, rnd)
@@ -317,9 +372,7 @@ class RRTstar(RRT):
                     self.node_list.append(node_with_updated_parent)
                 else:
                     self.node_list.append(new_node)
-
-            if animation:
-                self.draw()
+                self.nodes_history.append(copy.deepcopy(self.node_list)) if log_history is True else None
 
             # if not self.search_until_max_iter and new_node:  # if reaches goal
             #     last_idx = self.search_best_goal_node()
@@ -470,6 +523,61 @@ class RRTstar(RRT):
         last_idx = self.search_best_goal_node()
         if last_idx is not None:
             self.planned_path = self.generate_final_course(last_idx)
+
+    def animate(
+        self,
+        xlim: list[float], ylim: list[float],
+        figsize: tuple[float, float] = (8, 8),
+        enlarge_range: float = 0.0,
+        end_step=None,
+        axes_setting: list = [0.09, 0.07, 0.85, 0.9]
+    ) -> None:
+        self.fig, ax = set_fig_params(figsize, xlim, ylim, axes_setting)
+        draw_obstacles(ax, self.known_obstacles, enlarge_range)
+        draw_start(ax, self.start_pos)
+        draw_goal(ax, self.goal_pos)
+        elems = []
+
+        # Start Animation
+        if end_step:
+            animation_len = end_step
+        else:
+            animation_len = len(self.nodes_history) + 20
+        pbar = tqdm(total=animation_len)
+        self.ani = anm.FuncAnimation(
+            self.fig, self.animate_one_step, fargs=(ax, elems, xlim, ylim, pbar),
+            frames=animation_len, interval=100,
+            repeat=False
+        )
+        plt.close()
+
+    def animate_one_step(self, i: int, ax, elems: list, xlim: list, ylim: list, pbar: tqdm):
+        while elems:
+            elems.pop().remove()
+
+        elems.append(
+            ax.text(
+                xlim[0] * 0.01,
+                ylim[1] * 1.02,
+                f"steps = {i}",
+                fontsize=10
+            )
+        )
+
+        # draw nodes
+        if i < len(self.nodes_history):
+            nodes = self.nodes_history[i]
+        else:
+            nodes = self.nodes_history[-1]
+        for node in nodes:
+            if node.parent:
+                x = [node.path_x[0], node.path_x[-1]]
+                y = [node.path_y[0], node.path_y[-1]]
+                elems += ax.plot(x, y, c="cyan")
+
+        # draw path
+
+        pbar.update(1)
 
 
 class ChanceConstrainedRRT(RRT):
@@ -864,7 +972,7 @@ class ChanceConstrainedRRT(RRT):
         draw_goal(ax, self.goal_pos)
 
         # self.draw_node_childs(ax, self.start_node, False)
-        self.draw_sampled_pts(ax)
+        # self.draw_sampled_pts(ax)
 
         plt.show()
 
