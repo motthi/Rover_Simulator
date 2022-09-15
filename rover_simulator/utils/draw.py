@@ -29,15 +29,15 @@ environment_cmap = LinearSegmentedColormap(
 )
 
 
-def set_fig_params(figsize:tuple, xlim:list, ylim:list, axes_setting:list=None):
+def set_fig_params(figsize:tuple, xlim:list=None, ylim:list=None, axes_setting:list=None):
     fig = plt.figure(figsize=figsize)
     if axes_setting:
         ax = fig.add_axes(axes_setting)
     else:
         ax = fig.add_subplot(111)
     ax.set_aspect('equal')
-    ax.set_xlim(xlim[0], xlim[1])
-    ax.set_ylim(ylim[0], ylim[1])
+    ax.set_xlim(xlim[0], xlim[1]) if xlim is not None else None
+    ax.set_ylim(ylim[0], ylim[1]) if ylim is not None else None
     ax.set_xlabel("X [m]", fontsize=10)
     ax.set_ylabel("Y [m]", fontsize=10)
     return fig, ax
