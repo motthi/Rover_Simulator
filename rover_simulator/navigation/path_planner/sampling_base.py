@@ -587,12 +587,12 @@ class ChanceConstrainedRRT(RRT):
             self.y = y
             self.head = head
             self.cov = cov
-            self.parent = None
+            self.parent: ChanceConstrainedRRT.Node = None
             self.cost = float('inf')    # Not used, for compatibility with RRT
             self.cost_lb = float('inf')         # Lower bound cost
             self.cost_ub = float('inf')  # Upper bound cost
             self.cost_fs = 0.0          # Cost from start
-            self.childs = []
+            # self.childs = []
             self.path_x = [self.x]
             self.path_y = [self.y]
             self.path_head = [self.head]
@@ -605,7 +605,7 @@ class ChanceConstrainedRRT(RRT):
         explore_region: list = [[0, 20], [0, 20]], known_obstacles: list = [], enlarge_range: float = 0,
         expand_distance: float = 3.0, path_resolution: float = 1.0,
         cost_func: function = None, steer_func: function = None,
-        goal_sample_rate: float = 0.3, goal_region=2.0,
+        goal_sample_rate: float = 0.01, goal_region=2.0,
         num_nearest_node: int = 6, p_safe: float = 0.99, k: float = 1.0
     ) -> None:
         super().__init__(start_pos, goal_pos, explore_region, known_obstacles, enlarge_range, expand_distance, goal_sample_rate, path_resolution, cost_func)
@@ -629,9 +629,10 @@ class ChanceConstrainedRRT(RRT):
         self.dt = 0.5
         self.start_cov = start_cov
         self.start_head = start_head
+        self.nodes_history = []
         self.name = "CC-RRT"
 
-    def calculate_path(self, max_iter: int = 200, *kargs) -> list:
+    def calculate_path(self, max_iter: int = 200, log_history=False, *kargs) -> list:
         self.cnt = 0
         self.sampled_pts = []
         if self.start_node is None:
@@ -641,8 +642,10 @@ class ChanceConstrainedRRT(RRT):
 
         self.node_list = [self.start_node]
         self.first_sample = True
+        self.nodes_history.append(copy.deepcopy(self.node_list)) if log_history is True else None
         for _ in range(max_iter):
             self.expand_tree()
+            self.nodes_history.append(copy.copy(self.node_list)) if log_history is True else None
 
         self.planned_path = self.generate_final_course()
         path_x = []
@@ -683,6 +686,9 @@ class ChanceConstrainedRRT(RRT):
             if not near_node in self.node_list:
                 continue
             new_nodes, _ = self.connect_to_target(near_node, trg_node)
+            if len(new_nodes) == 1:
+                if math.hypot(new_nodes[0].x - near_node.x, new_nodes[0].y - near_node.y) < 0.01:
+                    continue
             for new_node in new_nodes:
                 new_node.cost_fs = new_node.parent.cost_fs + self.cost(self.to_pose(new_node.parent), self.to_pose(new_node))
                 self.node_list.append(new_node)
@@ -801,14 +807,14 @@ class ChanceConstrainedRRT(RRT):
     def connect_nodes(self, pn: Node, cn: Node) -> None:
         if pn.parent == cn:
             raise Exception("pn's parent is cn")
-        if pn in cn.childs:
-            raise Exception("pn is cn's child")
+        # if pn in cn.childs:
+        #     raise Exception("pn is cn's child")
         cn.parent = pn
-        pn.childs.append(cn)
+        # pn.childs.append(cn)
 
     def disconnect_nodes(self, pn: Node, cn: Node) -> None:
         cn.parent = None
-        pn.childs.remove(cn)
+        # pn.childs.remove(cn)
 
     def get_m_nearest_nodes(self, node_list: list[Node], rnd_node: Node, m: int) -> list[ChanceConstrainedRRT.Node]:
         dist_costs = [self.dist_nodes(self.to_pose(node), self.to_pose(rnd_node)) for node in node_list]    # rnd_nodeから各nodeへの距離
@@ -945,36 +951,15 @@ class ChanceConstrainedRRT(RRT):
             figsize: tuple[float, float] = (8, 8),
             obstacles: list = [],
             enlarge_range: float = 0.0,
-            draw_ellipse: bool = True,
+            draw_ellipse_flag: bool = True,
             draw_result_only: bool = False
     ) -> None:
         self.fig, ax = set_fig_params(figsize, xlim, ylim)
         draw_obstacles(ax, obstacles, enlarge_range)
-
-        # Draw all nodes
-        if draw_result_only is False:
-            # self.draw_node_childs(ax, self.start_node, draw_ellipse)
-            for n in self.node_list:
-                if n.parent:
-                    ax.plot(n.path_x, n.path_y, color="cyan")
-                    if draw_ellipse is True:
-                        p = np.array([n.x, n.y, n.head])
-                        e = sigma_ellipse(p[0:2], n.cov[0:2, 0:2], 3, "blue")
-                        ax.add_patch(e)
-
-        # Draw path from start to goal
-        for n in self.planned_path:
-            if n.parent:
-                ax.plot(n.path_x, n.path_y, color="red", zorder=10)
-                if draw_ellipse is True and draw_result_only is True:
-                    p = np.array([n.x, n.y, n.head])
-                    e = sigma_ellipse(p[0:2], n.cov[0:2, 0:2], 3)
-                    ax.add_patch(e)
-
+        self.draw_nodes(ax, draw_ellipse_flag) if draw_result_only is False else None
+        self.draw_path(ax, "red", draw_ellipse_flag)
         draw_start(ax, self.start_pos)
         draw_goal(ax, self.goal_pos)
-
-        # self.draw_node_childs(ax, self.start_node, False)
         # self.draw_sampled_pts(ax)
 
         plt.show()
@@ -1003,14 +988,57 @@ class ChanceConstrainedRRT(RRT):
         for pt in self.sampled_pts:
             ax.scatter(pt.x, pt.y, color="red", s=5)
 
-    def draw_node_childs(self, ax, n, draw_ellipse, i=0):
-        for c_n in n.childs:
-            ax.plot(c_n.path_x, c_n.path_y, color="cyan")
-            if draw_ellipse is True:
-                p = np.array([c_n.x, c_n.y, c_n.head])
-                e = sigma_ellipse(p[0:2], c_n.cov[0:2, 0:2], 3, "blue")
+    def animate(
+        self,
+        xlim: list[float], ylim: list[float],
+        figsize: tuple[float, float] = (8, 8),
+        enlarge_range: float = 0.0,
+        end_step=None,
+        draw_ellipse_flag: bool = True,
+        axes_setting: list = [0.09, 0.07, 0.85, 0.9],
+        interval=100,
+    ) -> None:
+        self.fig, ax = set_fig_params(figsize, xlim, ylim, axes_setting)
+        draw_obstacles(ax, self.known_obstacles, enlarge_range)
+        draw_start(ax, self.start_pos)
+        draw_goal(ax, self.goal_pos)
+        elems = []
+
+        # Start Animation
+        if end_step:
+            animation_len = end_step
+        else:
+            animation_len = len(self.node_list) + 20
+        pbar = tqdm(total=animation_len)
+        self.ani = anm.FuncAnimation(
+            self.fig, self.animate_one_step, fargs=(ax, elems, xlim, ylim, draw_ellipse_flag, pbar),
+            frames=animation_len, interval=interval,
+            repeat=False
+        )
+        plt.close()
+
+    def animate_one_step(self, i: int, ax, elems: list, xlim: list, ylim: list, draw_ellipse: bool, pbar: tqdm):
+        while elems:
+            elems.pop().remove()
+
+        elems.append(
+            ax.text(
+                xlim[0] * 0.01,
+                ylim[1] * 1.02,
+                f"steps = {i}",
+                fontsize=10
+            )
+        )
+        if i <= len(self.node_list) - 1:
+            node = self.node_list[i]
+            ax.plot([node.path_x[0], node.path_x[-1]], [node.path_y[0], node.path_y[-1]], c="cyan")
+            if draw_ellipse:
+                p = np.array([node.x, node.y, node.head])
+                e = sigma_ellipse(p[0:2], node.cov[0:2, 0:2], 3, "blue")
                 ax.add_patch(e)
-            self.draw_node_childs(ax, c_n, draw_ellipse, i)
+        elif i == len(self.node_list):
+            self.draw_path(ax)
+        pbar.update(1)
 
 
 class ChanceConstrainedRRTstar(ChanceConstrainedRRT):
@@ -1030,8 +1058,8 @@ class ChanceConstrainedRRTstar(ChanceConstrainedRRT):
         for obs in known_obstacles:
             self.mu_xfree -= obs.r**2 * math.pi
 
-    def calculate_path(self, max_iter: int = 200, *kargs) -> list:
-        return super().calculate_path(max_iter, *kargs)
+    def calculate_path(self, max_iter: int = 200, log_history=False, *kargs) -> list:
+        return super().calculate_path(max_iter, log_history=log_history, *kargs)
 
     def expand_tree(self) -> None:
         trg_node = self.sample_new_node()
@@ -1111,7 +1139,8 @@ class ChanceConstrainedRRTstar(ChanceConstrainedRRT):
         near_idxes = []
         for idx, n in enumerate(node_list):
             dist = self.distance(n, trg_node)
-            if not n_min in n.childs and dist <= self.rn:
+            # if not n_min in n.childs and dist <= self.rn:
+            if dist <= self.rn:
                 near_idxes.append(idx)
         near_nodes = []
         # for n in node_list:
@@ -1135,3 +1164,63 @@ class ChanceConstrainedRRTstar(ChanceConstrainedRRT):
         gamma = 2**d * (1 + 1 / d) * self.mu_xfree
         r = (gamma * math.log(n) / (zeta * n)) ** (1 / d)
         return min(r, self.mu)
+
+    def animate(
+        self,
+        xlim: list[float], ylim: list[float],
+        figsize: tuple[float, float] = (8, 8),
+        enlarge_range: float = 0.0,
+        end_step=None,
+        draw_ellipse_flag: bool = True,
+        axes_setting: list = [0.09, 0.07, 0.85, 0.9]
+    ) -> None:
+        self.fig, ax = set_fig_params(figsize, xlim, ylim, axes_setting)
+        draw_obstacles(ax, self.known_obstacles, enlarge_range)
+        draw_start(ax, self.start_pos)
+        draw_goal(ax, self.goal_pos)
+        elems = []
+
+        # Start Animation
+        if end_step:
+            animation_len = end_step
+        else:
+            animation_len = len(self.nodes_history)
+        pbar = tqdm(total=animation_len)
+        self.ani = anm.FuncAnimation(
+            self.fig, self.animate_one_step, fargs=(ax, elems, xlim, ylim, draw_ellipse_flag, pbar),
+            frames=animation_len, interval=100,
+            repeat=False
+        )
+        plt.close()
+
+    def animate_one_step(self, i: int, ax, elems: list, xlim: list, ylim: list, draw_ellipse_flag: bool, pbar: tqdm):
+        while elems:
+            elems.pop().remove()
+
+        elems.append(
+            ax.text(
+                xlim[0] * 0.01,
+                ylim[1] * 1.02,
+                f"steps = {i}",
+                fontsize=10
+            )
+        )
+
+        # draw nodes
+        if i < len(self.nodes_history):
+            nodes = self.nodes_history[i]
+        else:
+            nodes = self.nodes_history[-1]
+        for node in nodes:
+            if node.parent:
+                x = [node.path_x[0], node.path_x[-1]]
+                y = [node.path_y[0], node.path_y[-1]]
+                elems += ax.plot(x, y, c="cyan")
+                if draw_ellipse_flag:
+                    p = np.array([node.x, node.y, node.head])
+                    e = sigma_ellipse(p[0:2], node.cov[0:2, 0:2], 3, "blue")
+                    elems.append(ax.add_patch(e))
+
+        # draw path
+
+        pbar.update(1)
