@@ -131,6 +131,7 @@ class World():
         start_pos: np.ndarray = None,
         goal_pos: np.ndarray = None,
         enlarge_range: float = 0.0,
+        legend_flag:bool = False,
         draw_waypoints_flag: bool = False,
         draw_sensing_results_flag: bool = False,
         draw_sensing_points_flag: bool = True,
@@ -150,6 +151,7 @@ class World():
 
         draw_start(ax, start_pos) if start_pos is not None else None
         draw_goal(ax, goal_pos) if goal_pos is not None else None
+        ax.legend() if legend_flag is True else None
 
     def animate(
         self,
