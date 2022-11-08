@@ -11,7 +11,7 @@ class ImaginalLocalizer(Localizer):
         super().__init__()
 
     def estimate_pose(self, previous_pose: np.ndarray, v: np.ndarray, w: np.ndarray, time_interval: float):
-        return state_transition(previous_pose, v, w, time_interval)
+        return np.array(state_transition(previous_pose, v, w, time_interval))
 
 
 class NoisyLocalizer(ImaginalLocalizer):
@@ -85,7 +85,7 @@ class KalmanFilter:
         self.pose = self.belief.mean
         self.motion_noise_stds = np.array([motion_noise_stds["nn"], motion_noise_stds["no"], motion_noise_stds["on"], motion_noise_stds["oo"]])
 
-    def estimate_pose(self, previous_pose: np.ndarray, v:float, w:float, dt: float):
+    def estimate_pose(self, previous_pose: np.ndarray, v: float, w: float, dt: float):
         if abs(w) < 1e-5:
             w = 1e-5  # 値が0になるとゼロ割りになって計算ができないのでわずかに値を持たせる
         self.belief.cov = covariance_transition(previous_pose, self.belief.cov, self.motion_noise_stds, v, w, dt)
