@@ -1,3 +1,4 @@
+from __future__ import annotations
 import math
 import copy
 import cv2
@@ -212,7 +213,7 @@ class Dijkstra(GridBasePathPlanning):
         neigbor_indice = []
         for neigbor_grid in neigbor_grids:
             neigbor_idx = idx + neigbor_grid
-            if(
+            if (
                 not self.isOutOfBounds(neigbor_idx) and
                 not self.isObstacle(neigbor_idx) and
                 not self.isObstacleDiagonal(idx, neigbor_idx)  # Diagonal
@@ -758,8 +759,8 @@ class FieldDstar(GridBasePathPlanning):
 
         self.opened_map = np.full(mapper.map.shape, 0, dtype=int)   # Map express wheter it is OPEN ot not
         self.key_map = np.full(np.append(np.array(mapper.map.shape), 2), np.array([float('inf'), float('inf')]))
-        self.g_map = np.full(mapper.map.shape, 0, dtype=float)
-        self.rhs_map = np.full(mapper.map.shape, 0, dtype=float)
+        self.g_map = np.full(mapper.map.shape, float('inf'), dtype=float)
+        self.rhs_map = np.full(mapper.map.shape, float('inf'))
         self.bptr_map = np.full(np.append(np.array(mapper.map.shape), 2), np.array([0, 0]))
         self.visted_map = np.full(mapper.map.shape, 0.0, dtype=int)
         self.metric_grid_map = np.full(mapper.map.shape, -1.0, dtype=np.float)  # Metric Map shows wheter the grid is observed, -1: Unobserved, 0: Free, 1: Obstacles
@@ -769,6 +770,7 @@ class FieldDstar(GridBasePathPlanning):
         self.g_map[self.goal_idx[0]][self.goal_idx[1]] = float('inf')
         self.rhs_map[self.goal_idx[0]][self.goal_idx[1]] = 0.0
         self.setOpen(self.goal_idx)
+        self.visted_map[self.goal_idx[0]][self.goal_idx[1]] = 1
 
         # if mapper is not None:
         #     self.local_grid_map = np.full(mapper.map.shape, 0.5, dtype=float)  # Local Map is Obstacle Occupancy Grid Map
@@ -781,12 +783,54 @@ class FieldDstar(GridBasePathPlanning):
         self.newObstacles = []
         self.name = "FieldDstar"
 
+    def calculate_path(self):
+        self.computeShortestPath()
+        waypoints = self.get_path(self.current_idx)
+        return waypoints
+
+    def get_path(self, idx):
+        # I do not know how to extract path
+        self.pathToTake = [idx]
+
+        last_cost = float('inf')
+        # if self.isObstacle(idx):
+        #     next_idx = idx
+        #     min_cost = float('inf')
+        #     for s_ in self.neigborGrids(idx):
+        #         c = 1.0 if np.linalg.norm(idx - s_) < 1.1 else 1.41
+        #         if min_cost > c + self.g(s_) and last_cost >= self.g(s_):
+        #             min_cost = c + self.g(s_)
+        #             last_cost = self.g(s_)
+        #             next_idx = s_
+        #     idx = next_idx
+
+        # while not self.isGoal(idx):
+        for i in range(200):
+            if self.isGoal(idx):
+                break
+            next_idx = idx
+            min_cost = float('inf')
+            for s_ in self.neigborGrids(idx):
+                if last_cost >= self.g(s_):
+                    last_cost = self.g(s_)
+                    next_idx = s_
+            idx = next_idx
+            if np.any(np.all(self.pathToTake == idx, axis=1)):
+                break
+            self.pathToTake.append(idx)
+        self.pathToTake.append(self.goal_idx)
+        waypoints = []
+        for grid in self.pathToTake:
+            waypoints.append(self.indexToPose(grid)[0:2])
+        return waypoints
+
     def computeShortestPath(self):
         while not self.kCompare(self.minValOfOpened(), self.key(self.start_idx)) or self.rhs(self.start_idx) != self.g(self.start_idx):
             s = self.minIdxOfOpened()
             if s is None:
                 print("Cannot find the path")
                 break
+            self.visted_map[s[0]][s[1]] = 1
             if self.g(s) > self.rhs(s):
                 self.g_map[s[0]][s[1]] = self.rhs(s)
                 self.unsetOpen(s)
@@ -794,13 +838,13 @@ class FieldDstar(GridBasePathPlanning):
                     if not self.hasVisited(s_):
                         self.g_map[s_[0]][s_[1]] = float('inf')
                         self.rhs_map[s_[0]][s_[1]] = float('inf')
-                        self.visted_map[s_[0]][s_[1]] = 1
+                        # self.visted_map[s_[0]][s_[1]] = 1
                     rhs_old = self.rhs(s_)
                     if self.rhs(s_) > self.computeCost(s_, s, self.ccknbr(s_, s)):
                         self.rhs_map[s_[0]][s_[1]] = self.computeCost(s_, s, self.ccknbr(s_, s))
                         self.bptr_map[s_[0]][s_[1]] = s
                     if self.rhs(s_) > self.computeCost(s_, s, self.cknbr(s_, s)):
-                        self.rhs_map[s_[0]][s_[1]] = self.computeCost(s_, s, self.cknbr(s_, s))
+                        self.rhs_map[s_[0]][s_[1]] = self.computeCost(s_, self.cknbr(s_, s), s)
                         self.bptr_map[s_[0]][s_[1]] = self.cknbr(s_, s)
                     if not math.isclose(self.rhs(s), rhs_old):
                         self.updateState(s_)
@@ -850,7 +894,7 @@ class FieldDstar(GridBasePathPlanning):
     def updateState(self, s):
         if self.g(s) != self.rhs(s):
             self.setOpen(s)
-        elif(self.isOpen(s)):
+        elif self.isOpen(s):
             self.unsetOpen(s)
 
     def computeCost(self, s, sa, sb):
@@ -860,6 +904,8 @@ class FieldDstar(GridBasePathPlanning):
         else:
             s1 = sa
             s2 = sb
+        if self.isOutOfBounds(s1) or self.isOutOfBounds(s2):
+            return float('inf')
         c_ = self.c(s, s2)
         b_ = self.c(s, s1)
         if min(c_, b_) == float('inf'):
