@@ -21,5 +21,6 @@ Sample codes are located at `./tests` directory.
 - scipy
 - tqdm
 - cython
+- jupyterlab
 - opencv-python
 - opencv-contrib-python
