@@ -14,7 +14,7 @@ Sample codes are located at `./tests` directory.
 
 ## Requirements
 
-## Module
+### Python Modules
 
 - numpy
 - matplotlib
