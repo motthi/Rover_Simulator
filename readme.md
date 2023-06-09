@@ -18,7 +18,7 @@ Sample codes are located at `./tests` directory.
 
 - numpy
 - matplotlib
-- scipy
+- scipy==1.10.1
 - tqdm
 - cython
 - opencv-python
