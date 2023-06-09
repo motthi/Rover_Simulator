@@ -367,7 +367,7 @@ class DstarLite(GridBasePathPlanning):
             raise ValueError("Goal position is out of bounds")
 
         self.local_grid_map = copy.copy(mapper.map)  # センシングによって構築したマップ
-        self.metric_grid_map = np.full(self.grid_num, -1.0, dtype=np.float)  # 経路計画で使用するマップ
+        self.metric_grid_map = np.full(self.grid_num, -1.0, dtype=float)  # 経路計画で使用するマップ
         self.g_map = np.full(self.local_grid_map.shape, float('inf'))
         self.rhs_map = np.full(self.local_grid_map.shape, float('inf'))
         self.is_in_U_map = np.full(self.local_grid_map.shape, 0, dtype=np.int16)
@@ -414,7 +414,7 @@ class DstarLite(GridBasePathPlanning):
             if occ > 0.5:
                 self.metric_grid_map[idx[0]][idx[1]] = 1.0
 
-    def calculate_path(self):
+    def calculate_path(self) -> np.ndarray:
         self.computeShortestPath(self.start_idx)
         waypoints = self.get_path(self.current_idx)
         return waypoints
@@ -517,7 +517,7 @@ class DstarLite(GridBasePathPlanning):
         waypoints = self.get_path(self.current_idx)
         return waypoints
 
-    def get_path(self, idx):
+    def get_path(self, idx) -> np.ndarray:
         self.pathToTake = [idx]
 
         last_cost = float('inf')
@@ -549,8 +549,8 @@ class DstarLite(GridBasePathPlanning):
         self.pathToTake.append(self.goal_idx)
         waypoints = []
         for grid in self.pathToTake:
-            waypoints.append(self.indexToPose(grid)[0:2])
-        return waypoints
+            waypoints.append(list(self.indexToPose(grid)[0:2]))
+        return np.array(waypoints)
 
     def rhs(self, s):
         return self.rhs_map[s[0]][s[1]]

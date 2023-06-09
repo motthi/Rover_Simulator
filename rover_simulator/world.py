@@ -188,7 +188,7 @@ class World():
             ax.text(
                 xlim[0] * 0.01,
                 ylim[1] * 1.02,
-                f"t = {self.time_interval * (start_step + i)}[s]" % (),
+                f"t = {self.time_interval * (start_step + i):.2f}[s]" % (),
                 fontsize=10
             )
         )
@@ -198,7 +198,9 @@ class World():
             draw_history_pose(ax, elems, rover.history.real_poses, rover.r, rover.color, i, start_step)
             draw_history_sensing_results(
                 ax, elems,
-                rover.history.real_poses[start_step + i], rover.history.estimated_poses[start_step + i], rover.history.sensing_results,
+                rover.history.real_poses[start_step + i],
+                rover.history.estimated_poses[start_step + i],
+                rover.history.sensing_results[start_step + i],
                 rover.r, rover.sensor.range, rover.sensor.fov,
                 draw_sensing_points_flag, draw_sensing_area_flag
             ) if rover.sensor is not None else None

@@ -7,7 +7,7 @@ import numpy as np
 import matplotlib.animation as anm
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
-from rover_simulator.core import*
+from rover_simulator.core import *
 from rover_simulator.utils.draw import environment_cmap, set_fig_params
 from rover_simulator.utils.motion import state_transition
 from rover_simulator.core import Obstacle, SensingPlanner
@@ -222,7 +222,7 @@ class FollowRover(DwaRover):
     def one_step(self, time_interval: float) -> None:
         self.waypoint = self.waypoints[0]
         while np.linalg.norm(self.estimated_pose[0:2] - self.waypoint[0:2]) < self.waypoint_dist and len(self.waypoints) > 1:
-            self.waypoints.pop(0)
+            self.waypoints = self.waypoints[1:]
             self.waypoint = self.waypoints[0]
         super().one_step(time_interval)
 
@@ -253,7 +253,7 @@ class OnlinePathPlanningRover(DwaRover):
         self.waypoint_dist = waypoint_dist
 
     def one_step(self, time_interval: float) -> None:
-        sensed_obstacles = None
+        sensed_obstacles = []
 
         # Collision Detection
         if self.collision_detector.detect_collision(self):
@@ -278,7 +278,7 @@ class OnlinePathPlanningRover(DwaRover):
         # Set next waypoint
         self.waypoint = self.waypoints[0]
         while np.linalg.norm(self.estimated_pose[0:2] - self.waypoint[0:2]) < self.waypoint_dist and len(self.waypoints) > 1:
-            self.waypoints.pop(0)
+            self.waypoints = self.waypoints[1:]
             self.waypoint = self.waypoints[0]
 
         # Calculate Control Inputs
@@ -309,9 +309,8 @@ class RoverAnimation():
         start_step: int = 0, end_step: int = None,
         figsize: tuple[float, float] = (8, 8),
         map_name='cost',
-        enlarge_obstacle: float = 0.0,
-        save_path: str = None,
-        debug: bool = False
+        enlarge_range: float = 0.0,
+        save_path: str = None
     ) -> None:
         end_step = self.world.step if end_step is None else end_step
         fig, ax = set_fig_params(figsize=figsize)
@@ -320,7 +319,7 @@ class RoverAnimation():
 
         if map_name == 'cost':
             for obstacle in self.world.obstacles:
-                enl_obs = patches.Circle(xy=(obstacle.pos[0], obstacle.pos[1]), radius=obstacle.r + enlarge_obstacle, fc='gray', ec='gray')
+                enl_obs = patches.Circle(xy=(obstacle.pos[0], obstacle.pos[1]), radius=obstacle.r + enlarge_range, fc='gray', ec='gray')
                 ax.add_patch(enl_obs)
             for obstacle in self.world.obstacles:
                 obs = patches.Circle(xy=(obstacle.pos[0], obstacle.pos[1]), radius=obstacle.r, fc='black', ec='black')
@@ -335,19 +334,13 @@ class RoverAnimation():
             self.rover.path_planner = None
 
         elems = []
-        for i in tqdm(range(start_step)):
-            self.animate_one_step(i, ax, None, 0, map_name, None)
         pbar = tqdm(total=end_step - start_step + 1)
-        if debug is True:
-            for i in range(end_step - start_step):
-                self.animate_one_step(i, ax, elems, start_step, map_name, pbar)
-        else:
-            self.ani = anm.FuncAnimation(
-                fig, self.animate_one_step, fargs=(ax, elems, start_step, map_name, pbar),
-                frames=end_step - start_step, interval=int(self.world.time_interval * 1000),
-                repeat=False
-            )
-            plt.show()
+        self.ani = anm.FuncAnimation(
+            fig, self.animate_one_step, fargs=(ax, elems, start_step, map_name, pbar),
+            frames=end_step - start_step, interval=int(self.world.time_interval * 1000),
+            repeat=False
+        )
+        plt.close()
         if save_path is not None:
             self.ani.save(save_path, writer='ffmpeg')
 
@@ -355,7 +348,7 @@ class RoverAnimation():
         while elems:
             elems.pop().remove()
 
-        time_str = "t = %.2f[s]" % (self.world.time_interval * (start_step + i))
+        time_str = f"t = {self.world.time_interval * (start_step + i):.2f}[s]"
         elems.append(
             ax.text(
                 self.xlim[0] * 0.01,
@@ -404,16 +397,29 @@ class RoverAnimation():
                     cmap = 'plasma'
                     vmin = None
                     vmax = None
+                    grid_width = self.rover.path_planner.grid_width
+                    grid_num = self.rover.path_planner.grid_num
                 elif map_name == 'metric':
                     draw_map = self.rover.path_planner.metric_grid_map
                     cmap = environment_cmap
                     vmin = -1.0
                     vmax = 1.0
+                    grid_width = self.rover.path_planner.grid_width
+                    grid_num = self.rover.path_planner.grid_num
                 elif map_name == 'local':
                     draw_map = self.rover.path_planner.local_grid_map
                     cmap = 'Greys'
                     vmin = 0.0
                     vmax = 1.0
+                    grid_width = self.rover.path_planner.grid_width
+                    grid_num = self.rover.path_planner.grid_num
+                elif map_name == 'map':
+                    draw_map = self.rover.mapper.map
+                    cmap = 'Greys'
+                    vmin = 0.0
+                    vmax = 1.0
+                    grid_width = self.rover.mapper.grid_width
+                    grid_num = self.rover.mapper.grid_num
                 im = ax.imshow(
                     cv2.rotate(draw_map, cv2.ROTATE_90_COUNTERCLOCKWISE),
                     cmap=cmap,
@@ -421,9 +427,9 @@ class RoverAnimation():
                     vmax=vmax,
                     alpha=0.5,
                     extent=(
-                        -self.rover.path_planner.grid_width / 2,
-                        self.rover.path_planner.grid_width * self.rover.path_planner.grid_num[0] - self.rover.path_planner.grid_width / 2,
-                        -self.rover.path_planner.grid_width / 2, self.rover.path_planner.grid_width * self.rover.path_planner.grid_num[1] - self.rover.path_planner.grid_width / 2
+                        -grid_width / 2,
+                        grid_width * grid_num[0] - grid_width / 2,
+                        -grid_width / 2, grid_width * grid_num[1] - grid_width / 2
                     ),
                     zorder=1.0
                 )

@@ -140,7 +140,7 @@ class SimpleHistory(History):
         while elems:
             elems.pop().remove()
 
-        time_str = "t = %.2f[s]" % (self.time_interval * (start_step + i))
+        time_str = f"t = {self.time_interval * (start_step + i):.2f}[s]"
         elems.append(
             ax.text(
                 xlim[0] * 0.01,

@@ -5,6 +5,8 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from matplotlib.colors import LinearSegmentedColormap
 from matplotlib.patches import Ellipse
+from matplotlib.axes import Axes
+from rover_simulator.core import Obstacle
 
 
 environment_cmap = LinearSegmentedColormap(
@@ -51,7 +53,7 @@ def save_ani(src, ani, dpi=300):
     ani.save(src, dpi=dpi)
 
 
-def draw_rover(ax, pose, r, color=None):
+def draw_rover(ax: Axes, pose, r, color=None):
     x, y, theta = pose
     xn = x + r * np.cos(theta)
     yn = y + r * np.sin(theta)
@@ -62,20 +64,20 @@ def draw_rover(ax, pose, r, color=None):
     ax.add_patch(cir)
 
 
-def draw_obstacles(ax, obstacles, enlarge_range, alpha=1.0):
+def draw_obstacles(ax: Axes, obstacles: list[Obstacle], enlarge_range, alpha=1.0):
     for obstacle in obstacles:
         obstacle.draw(ax, enlarge_range, alpha)
 
 
-def draw_start(ax, start_pos: np.ndarray) -> None:
+def draw_start(ax: Axes, start_pos: np.ndarray) -> None:
     ax.plot(start_pos[0], start_pos[1], "or", label="start")
 
 
-def draw_goal(ax, goal_pos: np.ndarray) -> None:
+def draw_goal(ax: Axes, goal_pos: np.ndarray) -> None:
     ax.plot(goal_pos[0], goal_pos[1], "xr", label="goal")
 
 
-def draw_pose(ax, pose, color, alpha=1.0) -> None:
+def draw_pose(ax: Axes, pose, color, alpha=1.0) -> None:
     ax.plot(
         [e[0] for e in pose],
         [e[1] for e in pose],
@@ -86,7 +88,7 @@ def draw_pose(ax, pose, color, alpha=1.0) -> None:
     )
 
 
-def draw_poses(ax, poses, color, linestyle="-", alpha=1.0) -> None:
+def draw_poses(ax: Axes, poses, color, linestyle="-", alpha=1.0) -> None:
     ax.plot(
         [e[0] for e in poses],
         [e[1] for e in poses],
@@ -97,7 +99,7 @@ def draw_poses(ax, poses, color, linestyle="-", alpha=1.0) -> None:
     )
 
 
-def draw_error_ellipses(ax, poses, covs, color="blue", plot_interval=10):
+def draw_error_ellipses(ax: Axes, poses, covs, color="blue", plot_interval=10):
     for i, (p, cov) in enumerate(zip(poses, covs)):
         if i % plot_interval == 0:
             e = sigma_ellipse(p[0:2], cov[0:2, 0:2], 3, color=color)
@@ -109,15 +111,8 @@ def draw_error_ellipses(ax, poses, covs, color="blue", plot_interval=10):
             ax.plot(xs, ys, color=color, alpha=0.5)
 
 
-def draw_waypoints(ax, waypoints: np.ndarray, color) -> None:
+def draw_waypoints(ax: Axes, waypoints: np.ndarray, color) -> None:
     ax.plot(waypoints[:, 0], waypoints[:, 1], linewidth=1.0, linestyle="-", color=color)
-    # ax.plot(
-    #     [e[0] for e in waypoints],
-    #     [e[1] for e in waypoints],
-    #     linewidth=1.0,
-    #     linestyle="-",
-    #     color=color
-    # )
 
 
 def draw_grid(idx: np.ndarray, grid_width: float, color: str, alpha: float, ax, elems=None, fill=True) -> None:
@@ -136,7 +131,7 @@ def draw_grid(idx: np.ndarray, grid_width: float, color: str, alpha: float, ax, 
         ax.add_patch(r)
 
 
-def draw_grid_map_contour(ax, grid_map, grid_num, grid_width, levels):
+def draw_grid_map_contour(ax: Axes, grid_map, grid_num, grid_width, levels):
     x = np.linspace(0, grid_num[0], grid_num[0]) * grid_width
     y = np.linspace(0, grid_num[1], grid_num[1]) * grid_width
     X, Y = np.meshgrid(x, y)
@@ -144,7 +139,7 @@ def draw_grid_map_contour(ax, grid_map, grid_num, grid_width, levels):
     ax.clabel(cntr)
 
 
-def draw_grid_map(ax, grid_map, cmap, vmin, vmax, alpha, extent, zorder, colorbar=True):
+def draw_grid_map(ax: Axes, grid_map, cmap, vmin, vmax, alpha, extent, zorder, colorbar=True):
     grid_map = cv2.rotate(grid_map, cv2.ROTATE_90_COUNTERCLOCKWISE)
     im = ax.imshow(
         grid_map,
@@ -168,7 +163,7 @@ def sigma_ellipse(p, cov, n, color="blue"):
     return Ellipse(p, width=2 * n * math.sqrt(eig_vals[0]), height=2 * n * math.sqrt(eig_vals[1]), angle=ang, fill=False, color=color, alpha=0.5, zorder=5)
 
 
-def draw_sensing_results(ax, poses, sensor_range, sensor_fov, sensing_results, draw_sensing_points_flag, draw_sensing_area_flag):
+def draw_sensing_results(ax: Axes, poses, sensor_range, sensor_fov, sensing_results, draw_sensing_points_flag, draw_sensing_area_flag):
     for i, sensing_result in enumerate(sensing_results):
         if sensing_result is None:
             continue
@@ -187,7 +182,7 @@ def draw_sensing_results(ax, poses, sensor_range, sensor_fov, sensing_results, d
                 ax.add_patch(sensing_range)
 
 
-def draw_history_pose(ax, elems: list, poses: list, rover_r: float, rover_color: str, step: int, start_step: int) -> None:
+def draw_history_pose(ax: Axes, elems: list, poses: list, rover_r: float, rover_color: str, step: int, start_step: int) -> None:
     xn, yn = poses[step][0:2] + rover_r * np.array([np.cos(poses[step][2]), np.sin(poses[step][2])])
     elems += ax.plot([poses[step][0], xn], [poses[step][1], yn], color=rover_color)
     elems += ax.plot(
@@ -200,7 +195,7 @@ def draw_history_pose(ax, elems: list, poses: list, rover_r: float, rover_color:
     elems.append(ax.add_patch(c))
 
 
-def draw_history_pose_with_error_ellipse(ax, elems: list, poses: list, covs: list, rover_r: float, rover_color: str, error_color: str, step: int, start_step: int) -> None:
+def draw_history_pose_with_error_ellipse(ax: Axes, elems: list, poses: list, covs: list, rover_r: float, rover_color: str, error_color: str, step: int, start_step: int) -> None:
     draw_history_pose(ax, elems, poses, rover_r, rover_color, step, start_step)
     e = sigma_ellipse(poses[step][0:2], covs[step][0:2, 0:2], 3, color=error_color)
     elems.append(ax.add_patch(e))
@@ -212,7 +207,7 @@ def draw_history_pose_with_error_ellipse(ax, elems: list, poses: list, covs: lis
 
 
 def draw_history_sensing_results(
-    ax, elems: list,
+    ax:Axes, elems: list,
     real_pose: np.ndarray, estimated_pose: np.ndarray,
     sensed_obstacles: list, rover_r: float, sensor_range: float, sensor_fov: float,
     draw_sensing_points_flag: bool, draw_sensing_area_flag: bool
@@ -228,7 +223,9 @@ def draw_history_sensing_results(
         )
         elems.append(ax.add_patch(sensing_range))
 
+        # print(sensed_obstacles)
         for sensed_obstacle in sensed_obstacles:
+            # print(sensed_obstacle)
             distance = sensed_obstacle['distance']
             angle = sensed_obstacle['angle'] + estimated_pose[2]
             radius = sensed_obstacle['radius']
@@ -242,7 +239,7 @@ def draw_history_sensing_results(
             elems.append(ax.add_patch(enl_obs))
 
 
-def draw_history_waypoints(ax, elems: list, waypoints_list: list, step: int) -> None:
+def draw_history_waypoints(ax:Axes, elems: list, waypoints_list: list, step: int) -> None:
     waypoints = waypoints_list[step]
     elems += ax.plot(
         [e[0] for e in waypoints],

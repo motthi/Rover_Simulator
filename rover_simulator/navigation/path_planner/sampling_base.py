@@ -95,7 +95,7 @@ class RRT(PathPlanner):
                 final_node = self.steer(self.node_list[-1], self.goal_node, self.expand_dis)
                 if self.check_collision(final_node, self.obstacle_list):
                     self.planned_path = self.generate_final_course(len(self.node_list) - 1)
-                    return [np.array([n.x, n.y]) for n in self.planned_path]
+                    return np.array([[n.x, n.y] for n in self.planned_path])
         return []
 
     def steer(self, from_node: Node, to_node: Node, extend_length: float = float("inf")):
@@ -382,7 +382,7 @@ class RRTstar(RRT):
         last_idx = self.search_best_goal_node()
         if last_idx is not None:
             self.planned_path = self.generate_final_course(last_idx)
-            return [np.array([n.x, n.y]) for n in self.planned_path]
+            return np.array([[n.x, n.y] for n in self.planned_path])
         return []
 
     def choose_parent(self, new_node, near_inds):

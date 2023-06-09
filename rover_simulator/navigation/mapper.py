@@ -151,12 +151,12 @@ class GridMapper(Mapper):
             return True
         return False
 
-    def draw_map(
+    def draw(
         self,
         xlim: list[float], ylim: list[float],
         figsize=(8, 8),
         obstacles: list[Obstacle] = [],
-        enlarge_obstacle: float = 0.0,
+        enlarge_range: float = 0.0,
         map_name='map'
     ) -> None:
         self.fig, ax = set_fig_params(figsize, xlim, ylim)
@@ -167,11 +167,11 @@ class GridMapper(Mapper):
         )
 
         if map_name == 'map':
-            draw_obstacles(ax, obstacles, enlarge_obstacle)
+            draw_obstacles(ax, obstacles, enlarge_range)
             draw_grid_map(ax, self.map, "Greys", 0.0, 1.0, 0.5, extent, 1.0)
         elif map_name == 'table':
-            draw_obstacles(ax, obstacles, enlarge_obstacle, 0.3)
-            draw_obstacles(ax, self.obstacles_table, enlarge_obstacle, 0.3)
+            draw_obstacles(ax, obstacles, enlarge_range, 0.3)
+            draw_obstacles(ax, self.obstacles_table, enlarge_range, 0.3)
 
 
 class TableMapper(Mapper):
