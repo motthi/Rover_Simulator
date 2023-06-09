@@ -88,7 +88,8 @@ class KalmanFilter:
     def estimate_pose(self, previous_pose: np.ndarray, v: float, w: float, dt: float):
         if abs(w) < 1e-5:
             w = 1e-5  # 値が0になるとゼロ割りになって計算ができないのでわずかに値を持たせる
-        self.belief.cov = covariance_transition(previous_pose, self.belief.cov, self.motion_noise_stds, v, w, dt)
-        self.belief.mean = state_transition(previous_pose, v, w, dt)
+        cov = covariance_transition(previous_pose, self.belief.cov, self.motion_noise_stds, v, w, dt)
+        mean = state_transition(previous_pose, v, w, dt)
+        self.belief = multivariate_normal(mean=mean, cov=cov)
         self.pose = self.belief.mean
         return self.pose
