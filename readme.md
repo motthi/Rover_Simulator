@@ -14,12 +14,13 @@ Sample codes are located at `./tests` directory.
 
 ## Requirements
 
-## Module
+### Python Modules
 
 - numpy
 - matplotlib
 - scipy==1.10.1
 - tqdm
 - cython
+- jupyterlab
 - opencv-python
 - opencv-contrib-python
