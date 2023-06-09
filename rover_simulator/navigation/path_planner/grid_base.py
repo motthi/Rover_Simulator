@@ -143,12 +143,12 @@ class Dijkstra(GridBasePathPlanning):
             idx, cost = self.expandGrid()
             self.cost_map[idx[0]][idx[1]] = cost
         path = self.get_path()
-        waypoints = [self.indexToPose(self.goal_idx)]
+        waypoints = [list(self.indexToPose(self.goal_idx)[:2])]
         for grid in path:
             pose = self.indexToPose(grid)
-            waypoints.append(pose[0:2])
+            waypoints.append(list(pose[0:2]))
         waypoints.reverse()
-        return waypoints
+        return np.array(waypoints)
 
     def expandGrid(self):
         if len(self.open_list) == 0:

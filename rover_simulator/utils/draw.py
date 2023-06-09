@@ -109,14 +109,15 @@ def draw_error_ellipses(ax, poses, covs, color="blue", plot_interval=10):
             ax.plot(xs, ys, color=color, alpha=0.5)
 
 
-def draw_waypoints(ax, waypoints: list, color) -> None:
-    ax.plot(
-        [e[0] for e in waypoints],
-        [e[1] for e in waypoints],
-        linewidth=1.0,
-        linestyle="-",
-        color=color
-    )
+def draw_waypoints(ax, waypoints: np.ndarray, color) -> None:
+    ax.plot(waypoints[:, 0], waypoints[:, 1], linewidth=1.0, linestyle="-", color=color)
+    # ax.plot(
+    #     [e[0] for e in waypoints],
+    #     [e[1] for e in waypoints],
+    #     linewidth=1.0,
+    #     linestyle="-",
+    #     color=color
+    # )
 
 
 def draw_grid(idx: np.ndarray, grid_width: float, color: str, alpha: float, ax, elems=None, fill=True) -> None:
