@@ -5,6 +5,7 @@ import networkx as nx
 import matplotlib.pyplot as plt
 from rover_simulator.utils.draw import set_fig_params, draw_grid_map
 from rover_simulator.navigation.path_planner import PathPlanner
+from rover_simulator.navigation.mapper import GridMapper
 
 
 class SkeltonPlanner(PathPlanner):
@@ -45,7 +46,7 @@ class SkeltonPlanner(PathPlanner):
         skeleton = cv2.ximgproc.thinning(bin_route, thinningType=cv2.ximgproc.THINNING_GUOHALL)
         return skeleton
 
-    def extract_network(self, skimg):
+    def extract_network(self, skimg: np.ndarray) -> nx.Graph:
         graph = sknw.build_sknw(skimg.astype(np.uint32), multi=True)
 
         # Rescale
@@ -78,8 +79,13 @@ class SkeltonPlanner(PathPlanner):
             self.path = np.concatenate([self.path, edge], axis=0)
         return self.path
 
-    def draw(self, mapper):
-        fig, ax = set_fig_params((16, 16))
+    def draw(
+            self,
+            mapper: GridMapper,
+            figsize=(8, 8),
+            xlim: list[float] = None, ylim: list[float] = None
+    ):
+        self.fig, ax = set_fig_params(figsize, xlim, ylim)
         extent = (
             -mapper.grid_width / 2,
             mapper.grid_width * mapper.grid_num[0],  # - mapper.grid_width / 2,

@@ -2,7 +2,7 @@ import math
 import numpy as np
 from scipy.spatial import cKDTree
 from rover_simulator.core import Controller, Obstacle
-from rover_simulator.utils.utils import angle_to_range
+from rover_simulator.utils.utils import set_angle_into_range
 from rover_simulator.utils.motion import state_transition
 
 
@@ -19,7 +19,7 @@ class ConstantSpeedController(Controller):
 class PurePursuitController(Controller):
     def __init__(self, v: float = 1.0, L: float = 1.0) -> None:
         self.v = v
-        self.L = 1.0
+        self.L = L
 
     def calculate_control_inputs(
         self,
@@ -27,7 +27,7 @@ class PurePursuitController(Controller):
         goal_pose: np.ndarray
     ):
         theta = np.arctan2(goal_pose[1] - rover_pose[1], goal_pose[0] - rover_pose[0]) - rover_pose[2]
-        theta = angle_to_range(theta)
+        theta = set_angle_into_range(theta)
         w = 2 * self.v * np.sin(theta) / self.L
         return self.v, w
 

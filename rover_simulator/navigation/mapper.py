@@ -1,8 +1,7 @@
-from __future__ import annotations
 import numpy as np
 from scipy.spatial import cKDTree
 from rover_simulator.core import Mapper, Sensor, Obstacle
-from rover_simulator.utils.utils import isInRange, angle_to_range, isInList, round_off
+from rover_simulator.utils.utils import is_angle_in_range, set_angle_into_range, is_in_list, round_off
 from rover_simulator.utils.draw import draw_grid_map, set_fig_params, draw_obstacles, draw_start, draw_goal, draw_grid
 
 
@@ -46,8 +45,8 @@ class GridMapper(Mapper):
         # Initailize occupancy of grid in sensing range to 0
         rover_idx = self.poseToIndex(rover_estimated_pose)
         sensed_grids = []
-        ang_range_min = angle_to_range(rover_estimated_pose[2] - self.sensor.fov / 2)
-        ang_range_max = angle_to_range(rover_estimated_pose[2] + self.sensor.fov / 2)
+        ang_range_min = set_angle_into_range(rover_estimated_pose[2] - self.sensor.fov / 2)
+        ang_range_max = set_angle_into_range(rover_estimated_pose[2] + self.sensor.fov / 2)
         sensing_range = self.sensor.range / self.grid_width
         for i in range(np.ceil(-sensing_range).astype(np.int32), np.floor(sensing_range).astype(np.int32) + 1):
             for j in range(np.ceil(-sensing_range).astype(np.int32), np.floor(sensing_range).astype(np.int32) + 1):
@@ -56,7 +55,7 @@ class GridMapper(Mapper):
                 u = rover_idx + np.array([i, j])
                 if self.isOutOfBounds(u):
                     continue
-                if isInRange(np.arctan2(j, i), ang_range_min, ang_range_max):
+                if is_angle_in_range(np.arctan2(j, i), ang_range_min, ang_range_max):
                     sensed_grids.append(u)
                     if self.map[u[0]][u[1]] <= 0.5:
                         self.map[u[0]][u[1]] = 0.01
@@ -76,13 +75,13 @@ class GridMapper(Mapper):
             idxes = self.obstacle_kdTree.query_ball_point(rover_estimated_pose[0:2], r=self.sensor.range)
             for idx in idxes:
                 obstacle_pos = self.obstacles_table[idx].pos
-                angle = angle_to_range(
+                angle = set_angle_into_range(
                     np.arctan2(
                         obstacle_pos[1] - rover_estimated_pose[1],
                         obstacle_pos[0] - rover_estimated_pose[0]
                     ) - rover_estimated_pose[2]
                 )
-                if isInRange(angle, -self.sensor.fov / 2, self.sensor.fov / 2):
+                if is_angle_in_range(angle, -self.sensor.fov / 2, self.sensor.fov / 2):
                     deleted_obstacles.append(idx)   # センシング範囲内の過去の障害物を一旦削除する
         # Delete obstacle list from obstacle_table
         for idx in sorted(deleted_obstacles, reverse=True):
@@ -103,7 +102,7 @@ class GridMapper(Mapper):
             else:
                 self.observed_grids.append([u, 0.01])
         for u, occ in updated_grids:
-            self.observed_grids.append([u, occ]) if not isInList(u, [v[0] for v in self.observed_grids]) else None
+            self.observed_grids.append([u, occ]) if not is_in_list(u, [v[0] for v in self.observed_grids]) else None
 
         # Create obstacle's KD Tree
         if not len(self.obstacles_table) == 0:
@@ -125,7 +124,7 @@ class GridMapper(Mapper):
                 u = self.poseToIndex(lattice_pos)
                 if self.isOutOfBounds(u):
                     continue
-                if not isInList(u, [grids[0] for grids in updated_grids]):
+                if not is_in_list(u, [grids[0] for grids in updated_grids]):
                     self.map[u[0]][u[1]] = occupancy
                     updated_grids.append([u, occupancy])
         return updated_grids
@@ -153,7 +152,7 @@ class GridMapper(Mapper):
 
     def draw(
         self,
-        xlim: list[float], ylim: list[float],
+        xlim: list[float] = None, ylim: list[float] = None,
         figsize=(8, 8),
         obstacles: list[Obstacle] = [],
         enlarge_range: float = 0.0,
@@ -201,13 +200,13 @@ class TableMapper(Mapper):
             idxes = self.obstacle_kdTree.query_ball_point(rover_estimated_pose[0:2], r=self.sensor.range)
             for idx in idxes:
                 obstacle_pos = self.obstacles_table[idx].pos
-                angle = angle_to_range(
+                angle = set_angle_into_range(
                     np.arctan2(
                         obstacle_pos[1] - rover_estimated_pose[1],
                         obstacle_pos[0] - rover_estimated_pose[0]
                     ) - rover_estimated_pose[2]
                 )
-                if isInRange(angle, -self.sensor.fov / 2, self.sensor.fov / 2):
+                if is_angle_in_range(angle, -self.sensor.fov / 2, self.sensor.fov / 2):
                     obstacle_in_sense_idxes.append(idx)
 
         # list up obstales which is out of retain_range

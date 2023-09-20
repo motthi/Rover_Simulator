@@ -8,7 +8,7 @@ def round_off(x, digit=0):
     return (s * x * p * 2 + 1) // 2 / p * s
 
 
-def isInList(idx: np.ndarray, idx_list: list) -> bool:
+def is_in_list(idx: np.ndarray, idx_list: list) -> bool:
     if len(idx_list) == 0:
         return False
     elif np.any(np.all(idx == [chk_idx for chk_idx in idx_list], axis=1)):
@@ -17,22 +17,22 @@ def isInList(idx: np.ndarray, idx_list: list) -> bool:
         return False
 
 
-def isInRange(angle: float, rangeMin: float, rangeMax: float):
-    if rangeMin < rangeMax:
-        if angle >= rangeMin and angle < rangeMax:
+def is_angle_in_range(angle: float, ang_min: float, ang_max: float):
+    if ang_min < ang_max:
+        if angle >= ang_min and angle < ang_max:
             return True
         else:
             return False
     else:
-        if angle >= rangeMin:
+        if angle >= ang_min:
             return True
-        elif angle < rangeMax:
+        elif angle < ang_max:
             return True
         else:
             return False
 
 
-def angle_to_range(angle:float) -> float:
+def set_angle_into_range(angle: float) -> float:
     while angle > math.pi:
         angle -= 2 * math.pi
     while angle < -math.pi:
@@ -40,22 +40,22 @@ def angle_to_range(angle:float) -> float:
     return angle
 
 
-def lToP(l):
+def l2p(l):
     return 1 - 1 / (1 + np.exp(l))
 
 
-def pToL(p):
+def p2l(p):
     return np.log(p / (1 - p))
 
 
-def updateL(l, p):
+def update_l(l, p):
     return l + np.log(p / (1 - p))
 
 
-def updateP(p, p_):
-    l = pToL(p)
-    l = updateL(l, p_)
-    return lToP(l)
+def update_p(p, p_):
+    l = p2l(p)
+    l = update_l(l, p_)
+    return l2p(l)
 
 
 class GeoEllipse():

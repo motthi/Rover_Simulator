@@ -1,4 +1,3 @@
-from __future__ import annotations
 import sys
 import copy
 import random
@@ -6,11 +5,14 @@ import math
 import numpy as np
 import matplotlib.animation as anm
 import matplotlib.pyplot as plt
+from matplotlib.axes import Axes
 from scipy.spatial import cKDTree
 from rover_simulator.navigation.path_planner import PathPlanner
-from rover_simulator.utils.utils import angle_to_range
+from rover_simulator.core import Obstacle
+from rover_simulator.utils.utils import set_angle_into_range
 from rover_simulator.utils.cmotion.cmotion import state_transition, covariance_transition, prob_collision
 from rover_simulator.utils.draw import set_fig_params, draw_obstacles, draw_start, draw_goal, sigma_ellipse
+
 
 if 'google.colab' in sys.modules:
     from tqdm.notebook import tqdm  # Google Colaboratory
@@ -34,12 +36,12 @@ class RRT(PathPlanner):
         self,
         start_pos: np.ndarray = None, goal_pos: np.ndarray = None,
         explore_region: list = [[0, 20], [0, 20]],
-        known_obstacles: list = [],
+        known_obstacles: list[Obstacle] = [],
         enlarge_range: float = 0.0,
         expand_distance: float = 3.0,
         goal_sample_rate: float = 0.9,
         path_resolution: float = 0.5,
-        cost_func: function = None
+        cost_func=None
     ):
         super().__init__()
         self.start_pos = start_pos
@@ -160,10 +162,10 @@ class RRT(PathPlanner):
     def calc_distance_and_angle(self, from_node, to_node):
         return self.distance(from_node, to_node), self.node_heading_angle(from_node, to_node)
 
-    def distance(self, n1: RRT.Node, n2: RRT.Node):
+    def distance(self, n1: Node, n2: Node):
         return math.hypot(n2.x - n1.x, n2.y - n1.y)
 
-    def node_heading_angle(self, from_node: RRT.Node, to_node: RRT.Node):
+    def node_heading_angle(self, from_node: Node, to_node: Node):
         return math.atan2(to_node.y - from_node.y, to_node.x - from_node.x)
 
     def generate_final_course(self, goal_ind):
@@ -180,7 +182,7 @@ class RRT(PathPlanner):
         waypoints.reverse()
         return waypoints
 
-    def to_pose(self, n: RRT.Node):
+    def to_pose(self, n: Node):
         return np.array([n.x, n.y])
 
     def save_log(self, src: str) -> None:
@@ -262,7 +264,7 @@ class RRT(PathPlanner):
 
     def draw(
             self,
-            xlim: list[float], ylim: list[float],
+            xlim: list[float] = None, ylim: list[float] = None,
             figsize: tuple[float, float] = (8, 8),
             obstacles: list = [],
             enlarge_range: float = 0.0,
@@ -277,7 +279,7 @@ class RRT(PathPlanner):
 
     def animate(
         self,
-        xlim: list[float], ylim: list[float],
+        xlim: list[float] = None, ylim: list[float] = None,
         figsize: tuple[float, float] = (8, 8),
         enlarge_range: float = 0.0,
         end_step=None,
@@ -302,7 +304,7 @@ class RRT(PathPlanner):
         )
         plt.close()
 
-    def animate_one_step(self, i: int, ax, elems: list, xlim: list, ylim: list, pbar: tqdm):
+    def animate_one_step(self, i: int, ax: Axes, elems: list, xlim: list, ylim: list, pbar: tqdm):
         while elems:
             elems.pop().remove()
 
@@ -334,7 +336,7 @@ class RRTstar(RRT):
         path_resolution: float = 0.5,
         connect_circle_dist: float = 50.0,
         search_until_max_iter: bool = False,
-        cost_func: function = None
+        cost_func=None
     ):
         """
         Setting Parameter
@@ -526,7 +528,7 @@ class RRTstar(RRT):
 
     def animate(
         self,
-        xlim: list[float], ylim: list[float],
+        xlim: list[float] = None, ylim: list[float] = None,
         figsize: tuple[float, float] = (8, 8),
         enlarge_range: float = 0.0,
         end_step=None,
@@ -551,7 +553,7 @@ class RRTstar(RRT):
         )
         plt.close()
 
-    def animate_one_step(self, i: int, ax, elems: list, xlim: list, ylim: list, pbar: tqdm):
+    def animate_one_step(self, i: int, ax: Axes, elems: list, xlim: list, ylim: list, pbar: tqdm):
         while elems:
             elems.pop().remove()
 
@@ -592,7 +594,7 @@ class ChanceConstrainedRRT(RRT):
             self.cost_lb = float('inf')         # Lower bound cost
             self.cost_ub = float('inf')  # Upper bound cost
             self.cost_fs = 0.0          # Cost from start
-            # self.childs = []
+            self.childs = []
             self.path_x = [self.x]
             self.path_y = [self.y]
             self.path_head = [self.head]
@@ -604,7 +606,7 @@ class ChanceConstrainedRRT(RRT):
         start_head: float = None, motion_noise_stds: dict = {"nn": 0.1, "no": 0.0001, "on": 0.013, "oo": 0.02},
         explore_region: list = [[0, 20], [0, 20]], known_obstacles: list = [], enlarge_range: float = 0,
         expand_distance: float = 3.0, path_resolution: float = 1.0,
-        cost_func: function = None, steer_func: function = None,
+        cost_func=None, steer_func=None,
         goal_sample_rate: float = 0.01, goal_region=2.0,
         num_nearest_node: int = 6, p_safe: float = 0.99, k: float = 1.0
     ) -> None:
@@ -612,7 +614,7 @@ class ChanceConstrainedRRT(RRT):
         if start_pos is not None and goal_pos is not None and start_cov is not None:
             if start_head is None:
                 start_head = np.arctan2(goal_pos[1] - start_pos[1], goal_pos[0] - start_pos[0])
-                start_head = angle_to_range(start_head)
+                start_head = set_angle_into_range(start_head)
             self.start_node = self.Node(start_pos[0], start_pos[1], start_head, start_cov)
             self.goal_node = self.Node(goal_pos[0], goal_pos[1], None, None)
         self.num_nearest_node = num_nearest_node
@@ -747,7 +749,7 @@ class ChanceConstrainedRRT(RRT):
     def rotation_matrix(self, t):
         return np.array([[math.cos(t), -math.sin(t)], [math.sin(t), math.cos(t)]])
 
-    def connect_to_target(self, prev_node: Node, trg_node: Node, expand_dis: float = float('inf'), connect_to_end=False) -> list[list[ChanceConstrainedRRT.Node], bool]:
+    def connect_to_target(self, prev_node: Node, trg_node: Node, expand_dis: float = float('inf'), connect_to_end=False) -> list[list[Node], bool]:
         dist_to_trg = float('inf')
         trg_pose = np.array([trg_node.x, trg_node.y, trg_node.head])
         node = self.Node(prev_node.x, prev_node.y, prev_node.head, prev_node.cov)
@@ -792,7 +794,7 @@ class ChanceConstrainedRRT(RRT):
                 new_nodes.append(node)
         return new_nodes, (dist_to_trg < self.expand_dis and len(new_nodes) > 0) and flag_safe
 
-    def update_node(self, node: ChanceConstrainedRRT.Node, prev_pose: np.ndarray, new_pose: np.ndarray, cov: np.ndarray) -> ChanceConstrainedRRT.Node:
+    def update_node(self, node: Node, prev_pose: np.ndarray, new_pose: np.ndarray, cov: np.ndarray) -> Node:
         node.x = new_pose[0]
         node.y = new_pose[1]
         node.head = new_pose[2]
@@ -816,7 +818,7 @@ class ChanceConstrainedRRT(RRT):
         cn.parent = None
         # pn.childs.remove(cn)
 
-    def get_m_nearest_nodes(self, node_list: list[Node], rnd_node: Node, m: int) -> list[ChanceConstrainedRRT.Node]:
+    def get_m_nearest_nodes(self, node_list: list[Node], rnd_node: Node, m: int) -> list[Node]:
         dist_costs = [self.dist_nodes(self.to_pose(node), self.to_pose(rnd_node)) for node in node_list]    # rnd_nodeから各nodeへの距離
         fs_costs = [node.cost_fs for node in node_list]  # スタート地点から各nodeまでの距離
 
@@ -882,7 +884,7 @@ class ChanceConstrainedRRT(RRT):
                 return False
         return True
 
-    def to_pose(self, n: ChanceConstrainedRRT.Node):
+    def to_pose(self, n: Node):
         return np.array([n.x, n.y, n.head])
 
     def to_npz_format(self, node_list: list) -> dict:
@@ -947,7 +949,7 @@ class ChanceConstrainedRRT(RRT):
 
     def draw(
             self,
-            xlim: list[float], ylim: list[float],
+            xlim: list[float] = None, ylim: list[float] = None,
             figsize: tuple[float, float] = (8, 8),
             obstacles: list = [],
             enlarge_range: float = 0.0,
@@ -1017,7 +1019,7 @@ class ChanceConstrainedRRT(RRT):
         )
         plt.close()
 
-    def animate_one_step(self, i: int, ax, elems: list, xlim: list, ylim: list, draw_ellipse: bool, pbar: tqdm):
+    def animate_one_step(self, i: int, ax: Axes, elems: list, xlim: list, ylim: list, draw_ellipse: bool, pbar: tqdm):
         while elems:
             elems.pop().remove()
 
@@ -1048,7 +1050,7 @@ class ChanceConstrainedRRTstar(ChanceConstrainedRRT):
         motion_noise_stds: dict = {"nn": 0.1, "no": 0.0001, "on": 0.013, "oo": 0.02},
         explore_region: list = [[0, 20], [0, 20]],
         known_obstacles: list = [], enlarge_range: float = 0, expand_distance: float = 3, path_resolution: float = 3.0,
-        cost_func: function = None, steer_func: function = None,
+        cost_func=None, steer_func=None,
         goal_sample_rate: float = 0.3, goal_region=2, num_nearest_node: int = 6,
         p_safe: float = 0.99, k: float = 1, mu: float = 10.0
     ) -> None:
@@ -1167,7 +1169,7 @@ class ChanceConstrainedRRTstar(ChanceConstrainedRRT):
 
     def animate(
         self,
-        xlim: list[float], ylim: list[float],
+        xlim: list[float] = None, ylim: list[float] = None,
         figsize: tuple[float, float] = (8, 8),
         enlarge_range: float = 0.0,
         end_step=None,
@@ -1193,7 +1195,7 @@ class ChanceConstrainedRRTstar(ChanceConstrainedRRT):
         )
         plt.close()
 
-    def animate_one_step(self, i: int, ax, elems: list, xlim: list, ylim: list, draw_ellipse_flag: bool, pbar: tqdm):
+    def animate_one_step(self, i: int, ax: Axes, elems: list, xlim: list, ylim: list, draw_ellipse_flag: bool, pbar: tqdm):
         while elems:
             elems.pop().remove()
 

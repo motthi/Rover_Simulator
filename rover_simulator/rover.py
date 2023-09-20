@@ -1,5 +1,3 @@
-
-from __future__ import annotations
 import sys
 import cv2
 import copy
@@ -7,6 +5,7 @@ import numpy as np
 import matplotlib.animation as anm
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
+from matplotlib.axes import Axes
 from rover_simulator.core import *
 from rover_simulator.utils.draw import environment_cmap, set_fig_params
 from rover_simulator.utils.motion import state_transition
@@ -305,17 +304,14 @@ class RoverAnimation():
 
     def animate(
         self,
-        xlim: list[float], ylim: list[float],
-        start_step: int = 0, end_step: int = None,
         figsize: tuple[float, float] = (8, 8),
-        map_name='cost',
-        enlarge_range: float = 0.0,
-        save_path: str = None
+        xlim: list[float] = None, ylim: list[float] = None,
+        start_step: int = 0, end_step: int = None,
+        map_name: str = 'cost',
+        enlarge_range: float = 0.0
     ) -> None:
         end_step = self.world.step if end_step is None else end_step
-        fig, ax = set_fig_params(figsize=figsize)
-        self.xlim = xlim
-        self.ylim = ylim
+        self.fig, ax = set_fig_params(figsize=figsize, xlim=xlim, ylim=ylim)
 
         if map_name == 'cost':
             for obstacle in self.world.obstacles:
@@ -334,25 +330,23 @@ class RoverAnimation():
             self.rover.path_planner = None
 
         elems = []
-        pbar = tqdm(total=end_step - start_step + 1)
+        pbar = tqdm(total=end_step - start_step)
         self.ani = anm.FuncAnimation(
-            fig, self.animate_one_step, fargs=(ax, elems, start_step, map_name, pbar),
+            self.fig, self.animate_one_step, fargs=(ax, xlim, ylim, elems, start_step, map_name, pbar),
             frames=end_step - start_step, interval=int(self.world.time_interval * 1000),
             repeat=False
         )
         plt.close()
-        if save_path is not None:
-            self.ani.save(save_path, writer='ffmpeg')
 
-    def animate_one_step(self, i, ax, elems, start_step, map_name, pbar):
+    def animate_one_step(self, i: int, ax: Axes, xlim: list, ylim: list, elems: list, start_step: int, map_name: str, pbar: tqdm):
         while elems:
             elems.pop().remove()
 
         time_str = f"t = {self.world.time_interval * (start_step + i):.2f}[s]"
         elems.append(
             ax.text(
-                self.xlim[0] * 0.01,
-                self.ylim[1] * 1.02,
+                xlim[0] * 0.01,
+                ylim[1] * 1.02,
                 time_str,
                 fontsize=10
             )
@@ -452,3 +446,9 @@ class RoverAnimation():
             elems.append(ax.add_patch(c))
 
         pbar.update(1) if not pbar is None else None
+
+    def save_animation(self, src: str, writer='ffmpeg'):
+        if self.ani:
+            self.ani.save(src, writer=writer)
+        else:
+            raise Exception("Animation is not created.")

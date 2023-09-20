@@ -1,4 +1,3 @@
-
 import numpy as np
 from scipy.spatial import cKDTree
 from rover_simulator.core import CollisionDetector, Rover, Obstacle

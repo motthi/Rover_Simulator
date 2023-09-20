@@ -1,7 +1,6 @@
-from __future__ import annotations
-import math
 import copy
 import cv2
+import math
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
@@ -9,7 +8,7 @@ from rover_simulator.core import Mapper, Obstacle
 from rover_simulator.navigation.mapper import GridMapper
 from rover_simulator.navigation.path_planner import PathPlanner, PathNotFoundError
 from rover_simulator.utils.utils import round_off
-from rover_simulator.utils.draw import *
+from rover_simulator.utils.draw import set_fig_params, draw_grid_map, draw_grid_map_contour, draw_obstacles, draw_start, draw_goal, environment_cmap
 
 
 neigbor_grids = np.array([[1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1], [0, -1], [1, -1]])
@@ -20,45 +19,45 @@ class GridBasePathPlanning(PathPlanner):
         pass
 
     def set_start(self, start_pos: np.ndarray):
-        self.start_idx = self.poseToIndex(start_pos[0:2])
+        self.start_idx = self.pose2index(start_pos[0:2])
 
     def set_goal(self, goal_pos: np.ndarray):
-        self.goal_idx = self.poseToIndex(goal_pos)
+        self.goal_idx = self.pose2index(goal_pos)
 
-    def indexToPose(self, idx):
+    def index2pose(self, idx):
         return np.append(idx * self.grid_width, 0.0)
 
-    def poseToIndex(self, pose: np.ndarray) -> np.ndarray:
+    def pose2index(self, pose: np.ndarray) -> np.ndarray:
         return round_off(np.array(pose[0:2]) / self.grid_width).astype('int32')
 
-    def neigborGrids(self, idx):
+    def get_neigbors(self, idx):
         neigbors = []
         for grid in neigbor_grids:
             neigbor_grid = idx + grid
-            if self.isOutOfBounds(neigbor_grid):
+            if self.is_ob(neigbor_grid):
                 continue
             neigbors.append(neigbor_grid)
         return neigbors
 
-    def isStart(self, idx):
+    def is_start(self, idx):
         if np.all(idx == self.start_idx):
             return True
         else:
             return False
 
-    def isGoal(self, idx):
+    def is_goal(self, idx):
         if np.all(idx == self.goal_idx):
             return True
         else:
             return False
 
-    def isObstacle(self, idx):
+    def is_obstacle(self, idx):
         if self.grid_map[idx[0]][idx[1]] > 0.5:
             return True
         else:
             return False
 
-    def isOutOfBounds(self, idx: np.ndarray) -> bool:
+    def is_ob(self, idx: np.ndarray) -> bool:
         if idx[0] >= self.grid_num[0]:
             return True
         elif idx[0] < 0:
@@ -69,14 +68,14 @@ class GridBasePathPlanning(PathPlanner):
             return True
         return False
 
-    def isObstacleDiagonal(self, idx1, idx2):
+    def has_obstacle_diag(self, idx1, idx2):
         v = idx2 - idx1
         if not np.all(np.abs(v) == [1, 1]):
             return False
         else:
-            if self.isObstacle(idx1 + [v[0], 0]):
+            if self.is_obstacle(idx1 + [v[0], 0]):
                 return True
-            elif self.isObstacle(idx1 + [0, v[1]]):
+            elif self.is_obstacle(idx1 + [0, v[1]]):
                 return True
             else:
                 return False
@@ -90,8 +89,8 @@ class Dijkstra(GridBasePathPlanning):
     ):
         self.grid_map = map
         self.grid_width = map_grid_width
-        self.start_idx = self.poseToIndex(start_pos) if start_pos is not None else None
-        self.goal_idx = self.poseToIndex(goal_pos) if goal_pos is not None else None
+        self.start_idx = self.pose2index(start_pos) if start_pos is not None else None
+        self.goal_idx = self.pose2index(goal_pos) if goal_pos is not None else None
         self.grid_num = np.array(map.shape) if map is not None else None
         self.grid_map = np.full(self.grid_num, 0.5, dtype=float) if map is not None else None
         self.cost_map = np.full(self.grid_num, float('inf'), dtype=float) if map is not None else None
@@ -109,7 +108,7 @@ class Dijkstra(GridBasePathPlanning):
         if map is not None:
             for cnt, (u, _) in enumerate(np.ndenumerate(self.cost_map)):
                 self.id_map[u[0]][u[1]] = cnt
-                if self.isStart(u):
+                if self.is_start(u):
                     self.open_list.append([cnt, 0, 0])
                     self.is_opened_map[u[0]][u[1]][0] = 1.0
                     self.is_opened_map[u[0]][u[1]][1] = 0.0
@@ -127,7 +126,7 @@ class Dijkstra(GridBasePathPlanning):
         self.is_closed_map = np.full(np.append(np.array(mapper.map.shape), 3), 0.0)
         for cnt, (u, _) in enumerate(np.ndenumerate(self.cost_map)):
             self.id_map[u[0]][u[1]] = cnt
-            if self.isStart(u):
+            if self.is_start(u):
                 self.open_list.append([cnt, 0, 0])
                 self.is_opened_map[u[0]][u[1]][0] = 1.0
                 self.is_opened_map[u[0]][u[1]][1] = 0.0
@@ -135,22 +134,22 @@ class Dijkstra(GridBasePathPlanning):
                 self.cost_map[u[0]][u[1]] = 0.0
 
     def calculate_path(self, *args):
-        if self.isOutOfBounds(self.start_idx):
+        if self.is_ob(self.start_idx):
             raise PathNotFoundError("Start index is out of bounds")
-        if self.isOutOfBounds(self.goal_idx):
+        if self.is_ob(self.goal_idx):
             raise PathNotFoundError("Goal index is out of bounds")
-        while not self.isClosed(self.goal_idx):
-            idx, cost = self.expandGrid()
+        while not self.is_closed(self.goal_idx):
+            idx, cost = self.expand_grid()
             self.cost_map[idx[0]][idx[1]] = cost
         path = self.get_path()
-        waypoints = [list(self.indexToPose(self.goal_idx)[:2])]
+        waypoints = [list(self.index2pose(self.goal_idx)[:2])]
         for grid in path:
-            pose = self.indexToPose(grid)
+            pose = self.index2pose(grid)
             waypoints.append(list(pose[0:2]))
         waypoints.reverse()
         return np.array(waypoints)
 
-    def expandGrid(self):
+    def expand_grid(self):
         if len(self.open_list) == 0:
             raise PathNotFoundError("Path was not found")
         val = np.argmin(self.open_list, axis=0)  # 評価マップの中から最も小さいもの抽出
@@ -167,14 +166,14 @@ class Dijkstra(GridBasePathPlanning):
         self.is_closed_map[idx[0]][idx[1]][0] = 1.0
         self.is_closed_map[idx[0]][idx[1]][1] = cost_f
         self.is_closed_map[idx[0]][idx[1]][2] = cost_g
-        self.calculateCost(idx, cost_g)  # コストの計算
+        self.calc_cost(idx, cost_g)  # コストの計算
         return idx, cost_f
 
-    def calculateCost(self, idx, cost_g):
-        for neigbor_idx in self.listFreeNeigbor(idx):
+    def calc_cost(self, idx, cost_g):
+        for neigbor_idx in self.get_free_neigbors(idx):
             # evaluation_f = cost_g + self.cost(neigbor_idx) + self.c(neigbor_idx, idx)
             evaluation_f = cost_g + self.c(neigbor_idx, idx)
-            if self.isOpened(neigbor_idx):
+            if self.is_opened(neigbor_idx):
                 neigbor_cost_f = self.is_opened_map[neigbor_idx[0]][neigbor_idx[1]][1]
                 neigbor_cost_g = self.is_opened_map[neigbor_idx[0]][neigbor_idx[1]][2]
                 if neigbor_cost_f > evaluation_f:
@@ -184,7 +183,7 @@ class Dijkstra(GridBasePathPlanning):
                     self.is_opened_map[neigbor_idx[0]][neigbor_idx[1]][2] = 0.0
                 else:
                     continue
-            elif self.isClosed(neigbor_idx):
+            elif self.is_closed(neigbor_idx):
                 neigbor_cost_f = self.is_closed_map[neigbor_idx[0]][neigbor_idx[1]][1]
                 neigbor_cost_g = self.is_closed_map[neigbor_idx[0]][neigbor_idx[1]][2]
                 if neigbor_cost_f > evaluation_f:
@@ -209,25 +208,25 @@ class Dijkstra(GridBasePathPlanning):
         path.append(self.start_idx)
         return path
 
-    def listFreeNeigbor(self, idx):
+    def get_free_neigbors(self, idx):
         neigbor_indice = []
         for neigbor_grid in neigbor_grids:
             neigbor_idx = idx + neigbor_grid
             if (
-                not self.isOutOfBounds(neigbor_idx) and
-                not self.isObstacle(neigbor_idx) and
-                not self.isObstacleDiagonal(idx, neigbor_idx)  # Diagonal
+                not self.is_ob(neigbor_idx) and
+                not self.is_obstacle(neigbor_idx) and
+                not self.has_obstacle_diag(idx, neigbor_idx)  # Diagonal
             ):
                 neigbor_indice.append(neigbor_idx)
         return neigbor_indice
 
-    def isOpened(self, u):
+    def is_opened(self, u):
         if self.is_opened_map[u[0]][u[1]][0] == 1.0:
             return True
         else:
             return False
 
-    def isClosed(self, u):
+    def is_closed(self, u):
         if self.is_closed_map[u[0]][u[1]][0] == 1.0:
             return True
         else:
@@ -247,7 +246,7 @@ class Dijkstra(GridBasePathPlanning):
 
     def draw(
         self,
-        xlim: list[float], ylim: list[float],
+        xlim: list[float] = None, ylim: list[float] = None,
         figsize: tuple[float, float] = (8, 8),
         obstacles: list[Obstacle] = [],
         map_name: str = 'cost',
@@ -279,8 +278,8 @@ class Dijkstra(GridBasePathPlanning):
             draw_grid_map(ax, map, cmap, vmin, vmax, 0.5, extent, 1.0)
         if draw_contour:
             draw_grid_map_contour(ax, map, self.grid_num, self.grid_width, 20)
-        draw_start(ax, self.indexToPose(self.start_idx))
-        draw_goal(ax, self.indexToPose(self.goal_idx))
+        draw_start(ax, self.index2pose(self.start_idx))
+        draw_goal(ax, self.index2pose(self.goal_idx))
         plt.show()
 
 
@@ -294,10 +293,10 @@ class Astar(Dijkstra):
         self.heuristic = heuristic
         self.name = "Astar"
 
-    def calculateCost(self, idx, cost_g):  # コストの計算
-        for neigbor_idx in self.listFreeNeigbor(idx):
+    def calc_cost(self, idx, cost_g):  # コストの計算
+        for neigbor_idx in self.get_free_neigbors(idx):
             evaluation_f = cost_g + self.c(neigbor_idx, idx) + self.__h(neigbor_idx)  # 評価を計算
-            if self.isOpened(neigbor_idx):  # オープンリストに含まれているか
+            if self.is_opened(neigbor_idx):  # オープンリストに含まれているか
                 neigbor_cost_f = self.is_opened_map[neigbor_idx[0]][neigbor_idx[1]][1]
                 neigbor_cost_g = self.is_opened_map[neigbor_idx[0]][neigbor_idx[1]][2]
                 # neigbor_idx, neigbor_cost_f, neigbor_cost_g = self.open_list[[val[0] for val in self.open_list].index(self.id(neigbor_idx))]
@@ -308,7 +307,7 @@ class Astar(Dijkstra):
                     self.is_opened_map[neigbor_idx[0]][neigbor_idx[1]][2] = 0.0
                 else:
                     continue
-            elif self.isClosed(neigbor_idx):  # クローズドリストに含まれているか
+            elif self.is_closed(neigbor_idx):  # クローズドリストに含まれているか
                 neigbor_cost_f = self.is_closed_map[neigbor_idx[0]][neigbor_idx[1]][1]
                 neigbor_cost_g = self.is_closed_map[neigbor_idx[0]][neigbor_idx[1]][2]
                 # its_idx, neigbor_cost_f, neigbor_cost_g = self.closed_list[[val[0] for val in self.closed_list].index(self.id(neigbor_idx))]
@@ -337,9 +336,9 @@ class DstarLite(GridBasePathPlanning):
         heuristics: float = 0.5,
     ):
         self.grid_width = map_grid_width
-        self.start_idx = self.poseToIndex(start_pos) if start_pos is not None else None
+        self.start_idx = self.pose2index(start_pos) if start_pos is not None else None
         self.current_idx = self.start_idx if start_pos is not None else None
-        self.goal_idx = self.poseToIndex(goal_pos) if goal_pos is not None else None
+        self.goal_idx = self.pose2index(goal_pos) if goal_pos is not None else None
         self.heuristics = heuristics
 
         if mapper is not None:
@@ -361,9 +360,9 @@ class DstarLite(GridBasePathPlanning):
         self.grid_num = np.array(mapper.map.shape)
         self.grid_map = copy.copy(mapper.map)
 
-        if self.isOutOfBounds(self.start_idx):
+        if self.is_ob(self.start_idx):
             raise ValueError("Start position is out of bounds")
-        if self.isOutOfBounds(self.goal_idx):
+        if self.is_ob(self.goal_idx):
             raise ValueError("Goal position is out of bounds")
 
         self.local_grid_map = copy.copy(mapper.map)  # センシングによって構築したマップ
@@ -376,7 +375,7 @@ class DstarLite(GridBasePathPlanning):
         self.rhs_map[self.goal_idx[0]][self.goal_idx[1]] = 0
 
         self.U = []
-        self.__uAppend(self.goal_idx, [self.__h(self.start_idx, self.goal_idx), 0])
+        self.__u_append(self.goal_idx, [self.__h(self.start_idx, self.goal_idx), 0])
         self.previous_idx = np.array(self.start_idx)
 
         for idx, occ in np.ndenumerate(self.local_grid_map):
@@ -401,7 +400,7 @@ class DstarLite(GridBasePathPlanning):
 
         self.km = 0.0
         self.U = []
-        self.__uAppend(self.goal_idx, [self.__h(self.start_idx, self.goal_idx), 0])
+        self.__u_append(self.goal_idx, [self.__h(self.start_idx, self.goal_idx), 0])
 
         self.pathToTake = []
         self.takenPath = []
@@ -415,18 +414,18 @@ class DstarLite(GridBasePathPlanning):
                 self.metric_grid_map[idx[0]][idx[1]] = 1.0
 
     def calculate_path(self) -> np.ndarray:
-        self.computeShortestPath(self.start_idx)
+        self.compute_shortest_path(self.start_idx)
         waypoints = self.get_path(self.current_idx)
         return waypoints
 
     def update_path(self, pose: np.ndarray, mapper: Mapper):
-        self.current_idx = self.poseToIndex(pose)
+        self.current_idx = self.pose2index(pose)
 
         self.newObstacles = []
         self.newFrees = []
 
         for u, c in mapper.observed_grids:
-            if self.isOutOfBounds(u):
+            if self.is_ob(u):
                 continue
             prev_occ = self.local_grid_map[u[0]][u[1]]
             self.local_grid_map[u[0]][u[1]] = mapper.map[u[0]][u[1]]
@@ -441,10 +440,10 @@ class DstarLite(GridBasePathPlanning):
         update_to_free_list = []
         # Free -> Obstacle
         for u in self.newObstacles:
-            if self.isOutOfBounds(u):
+            if self.is_ob(u):
                 continue
-            for v in self.neigborGrids(u):
-                if self.isOutOfBounds(v):
+            for v in self.get_neigbors(u):
+                if self.is_ob(v):
                     continue
                 if not self.__c(u, v) == float('inf'):
                     update_to_obstacle_list.append([u, v])
@@ -457,10 +456,10 @@ class DstarLite(GridBasePathPlanning):
                     update_to_obstacle_list.append([x, w])
         # Obstacle -> Free
         for u in self.newFrees:
-            if self.isOutOfBounds(u):
+            if self.is_ob(u):
                 continue
-            for v in self.neigborGrids(u):
-                if self.isOutOfBounds(v):
+            for v in self.get_neigbors(u):
+                if self.is_ob(v):
                     continue
                 if not self.__c(u, v) == 0.0:
                     update_to_free_list.append([u, v])
@@ -468,7 +467,7 @@ class DstarLite(GridBasePathPlanning):
             # Diagonal
             for vertex in [[[-1, 0], [0, 1]], [[0, 1], [1, 0]], [[1, 0], [0, -1]], [[0, -1], [-1, 0]]]:
                 w, x = u + np.array(vertex[0]), u + np.array(vertex[1])
-                if self.isOutOfBounds(w) or self.isOutOfBounds(x):
+                if self.is_ob(w) or self.is_ob(x):
                     continue
                 if not self.__c(w, x) == 0.0:
                     update_to_free_list.append([w, x])
@@ -505,14 +504,14 @@ class DstarLite(GridBasePathPlanning):
                 c_old = vertex[2]
                 c_new = vertex[3]
                 if c_old > c_new:
-                    if not self.isGoal(u):
+                    if not self.is_goal(u):
                         self.rhs_map[u[0]][u[1]] = min(self.rhs(u), c_new + self.g(v))
                 elif math.isclose(self.rhs(u), c_old + self.g(v)):
-                    if not self.isGoal(u):
-                        self.rhs_map[u[0]][u[1]] = self.__getMinRhs(u)
-                self.updateVertex(u)
+                    if not self.is_goal(u):
+                        self.rhs_map[u[0]][u[1]] = self.__get_min_rhs(u)
+                self.update_vertex(u)
 
-            self.computeShortestPath(self.current_idx)
+            self.compute_shortest_path(self.current_idx)
 
         waypoints = self.get_path(self.current_idx)
         return waypoints
@@ -521,10 +520,10 @@ class DstarLite(GridBasePathPlanning):
         self.pathToTake = [idx]
 
         last_cost = float('inf')
-        if self.isObstacle(idx):
+        if self.is_obstacle(idx):
             next_idx = idx
             min_cost = float('inf')
-            for s_ in self.neigborGrids(idx):
+            for s_ in self.get_neigbors(idx):
                 c = 1.0 if np.linalg.norm(idx - s_) < 1.1 else 1.41
                 if min_cost > c + self.g(s_) and last_cost >= self.g(s_):
                     min_cost = c + self.g(s_)
@@ -533,11 +532,11 @@ class DstarLite(GridBasePathPlanning):
             idx = next_idx
         # while not self.isGoal(idx):
         for i in range(200):
-            if self.isGoal(idx):
+            if self.is_goal(idx):
                 break
             next_idx = idx
             min_cost = float('inf')
-            for s_ in self.neigborGrids(idx):
+            for s_ in self.get_neigbors(idx):
                 if min_cost > self.__c(idx, s_) + self.g(s_) and last_cost >= self.g(s_):
                     min_cost = self.__c(idx, s_) + self.g(s_)
                     last_cost = self.g(s_)
@@ -549,7 +548,7 @@ class DstarLite(GridBasePathPlanning):
         self.pathToTake.append(self.goal_idx)
         waypoints = []
         for grid in self.pathToTake:
-            waypoints.append(list(self.indexToPose(grid)[0:2]))
+            waypoints.append(list(self.index2pose(grid)[0:2]))
         return np.array(waypoints)
 
     def rhs(self, s):
@@ -566,7 +565,7 @@ class DstarLite(GridBasePathPlanning):
 
     def draw(
         self,
-        xlim: list[float], ylim: list[float],
+        xlim: list[float] = None, ylim: list[float] = None,
         figsize: tuple[float, float] = (8, 8),
         map_name: str = 'cost',
         obstacles: list[Obstacle] = [],
@@ -609,39 +608,39 @@ class DstarLite(GridBasePathPlanning):
             draw_grid_map(ax, map, cmap, vmin, vmax, 0.5, extent, 1.0)
         if draw_contour:
             draw_grid_map_contour(ax, map, self.grid_num, self.grid_width, 30)
-        draw_start(ax, self.indexToPose(self.start_idx))
-        draw_goal(ax, self.indexToPose(self.goal_idx))
+        draw_start(ax, self.index2pose(self.start_idx))
+        draw_goal(ax, self.index2pose(self.goal_idx))
         plt.show()
 
-    def computeShortestPath(self, index):
+    def compute_shortest_path(self, index):
         U_row = [row[1] for row in self.U]
         if len(U_row) == 0:
             return
         u_data = min(U_row)
         idx = U_row.index(u_data)
         u, k_old = np.array(self.U[idx][0]), self.U[idx][1]
-        k_new = self.__calculateKey(u)
+        k_new = self.__calculate_key(u)
         g_u = self.g(u)
         rhs_u = self.rhs(u)
 
-        while not self.__kCompare(k_old, self.__calculateKey(index)) or self.rhs(index) > self.g(index):
-            if self.__kCompare(k_old, k_new):
-                self.__uUpdate(u, k_new)
+        while not self.__k_compare(k_old, self.__calculate_key(index)) or self.rhs(index) > self.g(index):
+            if self.__k_compare(k_old, k_new):
+                self.__u_update(u, k_new)
             elif g_u > rhs_u:
                 self.g_map[u[0]][u[1]] = rhs_u
-                self.__uRemove(u)
-                for s in self.neigborGrids(u):
-                    if not self.isGoal(s):
+                self.__u_remove(u)
+                for s in self.get_neigbors(u):
+                    if not self.is_goal(s):
                         self.rhs_map[s[0]][s[1]] = min(self.rhs(s), self.__c(s, u) + self.g(u))
-                    self.updateVertex(s)
+                    self.update_vertex(s)
             else:
                 g_old = self.g(u)
                 self.g_map[u[0]][u[1]] = float('inf')
-                for s in self.neigborGrids(u) + [u]:
+                for s in self.get_neigbors(u) + [u]:
                     if math.isclose(self.rhs(s), self.__c(s, u) + g_old):
-                        if not self.isGoal(s):
-                            self.rhs_map[s[0]][s[1]] = self.__getMinRhs(s)
-                    self.updateVertex(s)
+                        if not self.is_goal(s):
+                            self.rhs_map[s[0]][s[1]] = self.__get_min_rhs(s)
+                    self.update_vertex(s)
 
             U_row = [row[1] for row in self.U]
             if len(U_row) == 0:
@@ -649,16 +648,16 @@ class DstarLite(GridBasePathPlanning):
             u_data = min(U_row)
             idx = U_row.index(u_data)
             u, k_old = np.array(self.U[idx][0]), self.U[idx][1]
-            k_new = self.__calculateKey(u)
+            k_new = self.__calculate_key(u)
             g_u = self.g(u)
             rhs_u = self.rhs(u)
 
-    def __calculateKey(self, s):
+    def __calculate_key(self, s):
         key1 = min(self.g(s), self.rhs(s)) + self.__h(self.current_idx, s) + self.km
         key2 = min(self.g(s), self.rhs(s))
         return [key1, key2]
 
-    def __kCompare(self, k1, k2):
+    def __k_compare(self, k1, k2):
         if k1[0] > k2[0]:
             return True
         elif math.isclose(k1[0], k2[0]):
@@ -666,7 +665,7 @@ class DstarLite(GridBasePathPlanning):
                 return True
         return False
 
-    def updateVertex(self, u):
+    def update_vertex(self, u):
         if self.is_in_U_map[u[0]][u[1]] == 1:
             u_flag = True
         else:
@@ -675,37 +674,37 @@ class DstarLite(GridBasePathPlanning):
         g_u = self.g(u)
         rhs_u = self.rhs(u)
         if not math.isclose(g_u, rhs_u) and u_flag:
-            self.__uUpdate(u, self.__calculateKey(u))
+            self.__u_update(u, self.__calculate_key(u))
         elif not math.isclose(g_u, rhs_u) and not u_flag:
-            self.__uAppend(u, self.__calculateKey(u))
+            self.__u_append(u, self.__calculate_key(u))
         elif math.isclose(g_u, rhs_u) and u_flag:
-            self.__uRemove(u)
+            self.__u_remove(u)
 
-    def __uAppend(self, u, u_num):
+    def __u_append(self, u, u_num):
         self.U.append([list(u), u_num])
         self.is_in_U_map[u[0]][u[1]] = 1
 
-    def __uRemove(self, u):
+    def __u_remove(self, u):
         U_row = [row[0] for row in self.U]
         idx = U_row.index(list(u))
         self.U.remove([list(u), self.U[idx][1]])
         self.is_in_U_map[u[0]][u[1]] = 0
 
-    def __uUpdate(self, u, u_num_new):
+    def __u_update(self, u, u_num_new):
         U_row = [row[0] for row in self.U]
         idx = U_row.index(list(u))
         self.U[idx][1] = u_num_new
         self.is_in_U_map[u[0]][u[1]] = 1
 
-    def __getMinRhs(self, u):
+    def __get_min_rhs(self, u):
         min_rhs = float('inf')
-        for v in self.neigborGrids(u):
+        for v in self.get_neigbors(u):
             if min_rhs > self.__c(u, v) + self.g(v):
                 min_rhs = self.__c(u, v) + self.g(v)
         return min_rhs
 
     def __c(self, u, v):
-        if self.isOutOfBounds(u) or self.__isObservedObstacle(u) or self.isOutOfBounds(v) or self.__isObservedObstacle(v):
+        if self.is_ob(u) or self.__isoObserved_obstacle(u) or self.is_ob(v) or self.__isoObserved_obstacle(v):
             return float('inf')
         else:
             if np.all(np.abs(u - v) == [1, 1]):
@@ -729,13 +728,13 @@ class DstarLite(GridBasePathPlanning):
     def __h(self, s1, s2):
         return np.round(self.heuristics * np.linalg.norm(s1 - s2), decimals=2)
 
-    def __isObservedObstacle(self, idx):
+    def __isoObserved_obstacle(self, idx):
         if self.metric_grid_map[idx[0]][idx[1]] > 0.5:
             return True
         else:
             return False
 
-    def isObstacle(self, idx):
+    def is_obstacle(self, idx):
         if self.metric_grid_map[idx[0]][idx[1]] > 0.5:
             return True
         else:
@@ -752,9 +751,9 @@ class FieldDstar(GridBasePathPlanning):
         super().__init__()
         self.grid_width = mapper.grid_width
         self.grid_num = np.array(mapper.map.shape)
-        self.start_idx = self.poseToIndex(start_pos) if start_pos is not None else None
+        self.start_idx = self.pose2index(start_pos) if start_pos is not None else None
         self.current_idx = self.start_idx if start_pos is not None else None
-        self.goal_idx = self.poseToIndex(goal_pos) if goal_pos is not None else None
+        self.goal_idx = self.pose2index(goal_pos) if goal_pos is not None else None
         self.heuristics = heristics
 
         self.opened_map = np.full(mapper.map.shape, 0, dtype=int)   # Map express wheter it is OPEN ot not
@@ -769,7 +768,7 @@ class FieldDstar(GridBasePathPlanning):
         self.rhs_map[self.start_idx[0]][self.start_idx[1]] = float('inf')
         self.g_map[self.goal_idx[0]][self.goal_idx[1]] = float('inf')
         self.rhs_map[self.goal_idx[0]][self.goal_idx[1]] = 0.0
-        self.setOpen(self.goal_idx)
+        self.set_open(self.goal_idx)
         self.visted_map[self.goal_idx[0]][self.goal_idx[1]] = 1
 
         # if mapper is not None:
@@ -784,7 +783,7 @@ class FieldDstar(GridBasePathPlanning):
         self.name = "FieldDstar"
 
     def calculate_path(self):
-        self.computeShortestPath()
+        self.compute_shortest_path()
         waypoints = self.get_path(self.current_idx)
         return waypoints
 
@@ -806,11 +805,11 @@ class FieldDstar(GridBasePathPlanning):
 
         # while not self.isGoal(idx):
         for i in range(200):
-            if self.isGoal(idx):
+            if self.is_goal(idx):
                 break
             next_idx = idx
             min_cost = float('inf')
-            for s_ in self.neigborGrids(idx):
+            for s_ in self.get_neigbors(idx):
                 if last_cost >= self.g(s_):
                     last_cost = self.g(s_)
                     next_idx = s_
@@ -821,67 +820,67 @@ class FieldDstar(GridBasePathPlanning):
         self.pathToTake.append(self.goal_idx)
         waypoints = []
         for grid in self.pathToTake:
-            waypoints.append(self.indexToPose(grid)[0:2])
+            waypoints.append(self.index2pose(grid)[0:2])
         return waypoints
 
-    def computeShortestPath(self):
-        while not self.kCompare(self.minValOfOpened(), self.key(self.start_idx)) or self.rhs(self.start_idx) != self.g(self.start_idx):
-            s = self.minIdxOfOpened()
+    def compute_shortest_path(self):
+        while not self.k_compare(self.min_val_of_opened(), self.key(self.start_idx)) or self.rhs(self.start_idx) != self.g(self.start_idx):
+            s = self.min_idx_of_opened()
             if s is None:
                 print("Cannot find the path")
                 break
             self.visted_map[s[0]][s[1]] = 1
             if self.g(s) > self.rhs(s):
                 self.g_map[s[0]][s[1]] = self.rhs(s)
-                self.unsetOpen(s)
-                for s_ in self.neigborGrids(s):
-                    if not self.hasVisited(s_):
+                self.unset_open(s)
+                for s_ in self.get_neigbors(s):
+                    if not self.has_visited(s_):
                         self.g_map[s_[0]][s_[1]] = float('inf')
                         self.rhs_map[s_[0]][s_[1]] = float('inf')
                         # self.visted_map[s_[0]][s_[1]] = 1
                     rhs_old = self.rhs(s_)
-                    if self.rhs(s_) > self.computeCost(s_, s, self.ccknbr(s_, s)):
-                        self.rhs_map[s_[0]][s_[1]] = self.computeCost(s_, s, self.ccknbr(s_, s))
+                    if self.rhs(s_) > self.compute_cost(s_, s, self.ccknbr(s_, s)):
+                        self.rhs_map[s_[0]][s_[1]] = self.compute_cost(s_, s, self.ccknbr(s_, s))
                         self.bptr_map[s_[0]][s_[1]] = s
-                    if self.rhs(s_) > self.computeCost(s_, s, self.cknbr(s_, s)):
-                        self.rhs_map[s_[0]][s_[1]] = self.computeCost(s_, self.cknbr(s_, s), s)
+                    if self.rhs(s_) > self.compute_cost(s_, s, self.cknbr(s_, s)):
+                        self.rhs_map[s_[0]][s_[1]] = self.compute_cost(s_, self.cknbr(s_, s), s)
                         self.bptr_map[s_[0]][s_[1]] = self.cknbr(s_, s)
                     if not math.isclose(self.rhs(s), rhs_old):
-                        self.updateState(s_)
+                        self.update_state(s_)
             else:
-                self.rhs_map[s[0]][s[1]] = self.minCostInNeigbor(s)
-                self.bptr_map[s[0]][s[1]] = self.minIdxInNeigbor(s)
+                self.rhs_map[s[0]][s[1]] = self.min_cost_in_neigbor(s)
+                self.bptr_map[s[0]][s[1]] = self.min_idx_in_neigbor(s)
                 if self.g(s) < self.rhs(s):
                     self.g_map[s[0]][s[1]] = float('inf')
-                    for s_ in self.neigborGrids(s):
+                    for s_ in self.get_neigbors(s):
                         if np.all(self.bptr(s_) == s) or np.all(self.bptr(s_) == self.cknbr(s_, s)):
-                            if not math.isclose(self.rhs(s_), self.computeCost(s_, self.bptr(s_), self.ccknbr(s_, self.bptr(s_)))):
-                                if self.g(s_) < self.rhs(s_) or not self.isOpen(s_):
+                            if not math.isclose(self.rhs(s_), self.compute_cost(s_, self.bptr(s_), self.ccknbr(s_, self.bptr(s_)))):
+                                if self.g(s_) < self.rhs(s_) or not self.is_open(s_):
                                     self.rhs_map[s_[0]][s_[1]] = float('inf')
-                                    self.updateState(s_)
+                                    self.update_state(s_)
                                 else:
-                                    self.rhs_map[s_[0]][s_[1]] = self.minCostInNeigbor(s_)
-                                    self.bptr_map[s_[0]][s_[1]] = self.minIdxInNeigbor(s_)
-                                    self.updateState(s_)
+                                    self.rhs_map[s_[0]][s_[1]] = self.min_cost_in_neigbor(s_)
+                                    self.bptr_map[s_[0]][s_[1]] = self.min_idx_in_neigbor(s_)
+                                    self.update_state(s_)
                         self.visted_map[s_[0]][s_[1]] = 1
-                self.updateState(s)
+                self.update_state(s)
 
-    def updateCellCost(self, x, c):
+    def update_cell_cost(self, x, c):
         if c > x:
             for s in self.corners(x):
-                if self.isCorner(self.bptr(s)) or self.isCorner(self.ccknbr(s)):
-                    if not math.isclose(self.rhs(s), self.computeCost(s, self.bptr(s), self.ccknbr(s, self.bptr(s)))):
-                        if self.g(s) < self.rhs(s) or self.isOpen(s):
+                if self.is_corner(self.bptr(s)) or self.is_corner(self.ccknbr(s)):
+                    if not math.isclose(self.rhs(s), self.compute_cost(s, self.bptr(s), self.ccknbr(s, self.bptr(s)))):
+                        if self.g(s) < self.rhs(s) or self.is_open(s):
                             self.rhs_map[s[0]][s[1]] = float('inf')
-                            self.updateState(s)
+                            self.update_state(s)
                         else:
-                            self.rhs_map[s[0]][s[1]] = self.minCostInNeigbor(s)
-                            self.bptr_map[s[0]][s[1]] = self.minIdxInNeigbor(s)
-                            self.updateState(s)
+                            self.rhs_map[s[0]][s[1]] = self.min_cost_in_neigbor(s)
+                            self.bptr_map[s[0]][s[1]] = self.min_idx_in_neigbor(s)
+                            self.update_state(s)
         else:
             rhs_min = float('inf')
             for s in self.corners(x):
-                if not self.hasVisited(s):
+                if not self.has_visited(s):
                     self.g_map[s[0]][s[1]] = float('inf')
                     self.rhs_map[s[0]][s[1]] = float('inf')
                     self.visted_map[s[0]][s[1]] = 1
@@ -889,22 +888,22 @@ class FieldDstar(GridBasePathPlanning):
                     rhs_min = self.rhs(s)
                     s_star = s
             if not math.isclose(rhs_min, float('inf')):
-                self.setOpen(s_star)
+                self.set_open(s_star)
 
-    def updateState(self, s):
+    def update_state(self, s):
         if self.g(s) != self.rhs(s):
-            self.setOpen(s)
-        elif self.isOpen(s):
-            self.unsetOpen(s)
+            self.set_open(s)
+        elif self.is_open(s):
+            self.unset_open(s)
 
-    def computeCost(self, s, sa, sb):
-        if self.isDiagonalNeigbor(s, sa):
+    def compute_cost(self, s, sa, sb):
+        if self.is_diagonal_neigbor(s, sa):
             s1 = sb
             s2 = sa
         else:
             s1 = sa
             s2 = sb
-        if self.isOutOfBounds(s1) or self.isOutOfBounds(s2):
+        if self.is_ob(s1) or self.is_ob(s2):
             return float('inf')
         c_ = self.c(s, s2)
         b_ = self.c(s, s1)
@@ -928,7 +927,7 @@ class FieldDstar(GridBasePathPlanning):
                     vs = c_ * np.sqrt(1.0 + (1.0 - x)**2) + b_ * x + self.g(s2)
         return vs
 
-    def isDiagonalNeigbor(self, s, s_):
+    def is_diagonal_neigbor(self, s, s_):
         ds = s_ - s
         if np.all(np.abs(ds) == np.array([1, 1])):
             return True
@@ -976,7 +975,7 @@ class FieldDstar(GridBasePathPlanning):
     def key(self, s: np.ndarray) -> list:
         return [min(self.g(s), self.rhs(s)) + self.h(self.start_idx, s), min(self.g(s), self.rhs(s))]
 
-    def kCompare(self, k1, k2):
+    def k_compare(self, k1, k2):
         if k1[0] > k2[0]:
             return True
         elif math.isclose(k1[0], k2[0]):
@@ -994,7 +993,7 @@ class FieldDstar(GridBasePathPlanning):
         return np.round(self.heuristics * np.linalg.norm(s1 - s2), decimals=2)
 
     def c(self, u, v):
-        if self.isOutOfBounds(u) or self.isObservedObstacle(u) or self.isOutOfBounds(v) or self.isObservedObstacle(v):
+        if self.is_ob(u) or self.is_observed_obstacle(u) or self.is_ob(v) or self.is_observed_obstacle(v):
             return float('inf')
         else:
             if np.all(np.abs(u - v) == [1, 1]):
@@ -1018,25 +1017,25 @@ class FieldDstar(GridBasePathPlanning):
     def bptr(self, s: np.ndarray) -> np.ndarray:
         return self.bptr_map[s[0]][s[1]]
 
-    def minIdxInNeigbor(self, s: np.ndarray) -> np.ndarray:
+    def min_idx_in_neigbor(self, s: np.ndarray) -> np.ndarray:
         min_cost = float('inf')
         min_idx = np.array([0, 0])
-        for s_ in self.neigborGrids(s):
-            cost = self.computeCost(s, s_, self.ccknbr(s, s_))
+        for s_ in self.get_neigbors(s):
+            cost = self.compute_cost(s, s_, self.ccknbr(s, s_))
             if min_cost > cost:
                 min_cost = cost
                 min_idx = s_
         return min_idx
 
-    def minCostInNeigbor(self, s: np.ndarray) -> float:
+    def min_cost_in_neigbor(self, s: np.ndarray) -> float:
         min_cost = float('inf')
-        for s_ in self.neigborGrids():
-            cost = self.computeCost(s, s_, self.ccknbr(s, s_))
+        for s_ in self.get_neigbors():
+            cost = self.compute_cost(s, s_, self.ccknbr(s, s_))
             if min_cost > cost:
                 min_cost = cost
         return cost
 
-    def minIdxOfOpened(self):
+    def min_idx_of_opened(self):
         x_idxes, y_idxes = np.where(self.opened_map == 1)
         min_idx = None
         key_val = [float('inf'), float('inf')]
@@ -1047,7 +1046,7 @@ class FieldDstar(GridBasePathPlanning):
                 min_idx = np.array([x_idx, y_idx])
         return min_idx
 
-    def minValOfOpened(self):
+    def min_val_of_opened(self):
         x_idxes, y_idxes = np.where(self.opened_map == 1)
         key_val = [float('inf'), float('inf')]
         for x_idx, y_idx in zip(x_idxes, y_idxes):
@@ -1056,24 +1055,24 @@ class FieldDstar(GridBasePathPlanning):
                 key_val = val
         return key_val
 
-    def setOpen(self, s):
+    def set_open(self, s):
         self.opened_map[s[0]][s[1]] = 1
         k = self.key(s)
         self.key_map[s[0]][s[1]][0] = k[0]
         self.key_map[s[0]][s[1]][1] = k[1]
 
-    def unsetOpen(self, s):
+    def unset_open(self, s):
         self.opened_map[s[0]][s[1]] = 0
         self.key_map[s[0]][s[1]][0] = float('inf')
         self.key_map[s[0]][s[1]][1] = float('inf')
 
-    def isOpen(self, s):
+    def is_open(self, s):
         if self.opened_map[s[0]][s[1]] == 1:
             return True
         else:
             return False
 
-    def hasVisited(self, s):
+    def has_visited(self, s):
         if self.visted_map[s[0]][s[1]] == 0.0:
             return False
         else:
@@ -1082,13 +1081,13 @@ class FieldDstar(GridBasePathPlanning):
     def corners(self, x):
         return [x, x + np.array([1, 0]), x + np.array([1, 1]), x + np.array([0, 1])]
 
-    def isCorner(self, s, x):
+    def is_corner(self, s, x):
         if np.all(s == x) or np.all(s == np.array([1, 0])) or np.all(s == np.array([1, 1])) or np.all(s == np.array([0, 1])):
             return True
         else:
             return False
 
-    def isObservedObstacle(self, idx):
+    def is_observed_obstacle(self, idx):
         if self.metric_grid_map[idx[0]][idx[1]] > 0.5:
             return True
         else:
@@ -1096,7 +1095,7 @@ class FieldDstar(GridBasePathPlanning):
 
     def draw(
         self,
-        xlim: list[float], ylim: list[float],
+        xlim: list[float] = None, ylim: list[float] = None,
         figsize: tuple[float, float] = (8, 8),
         map_name: str = 'cost',
         obstacles: list[Obstacle] = [],

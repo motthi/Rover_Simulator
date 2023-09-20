@@ -1,4 +1,3 @@
-from __future__ import annotations
 import sys
 import copy
 import numpy as np
@@ -84,7 +83,7 @@ class SimpleHistory(History):
 
     def draw(
         self,
-        xlim: list[float], ylim: list[float],
+        xlim: list[float] = None, ylim: list[float] = None,
         figsize: tuple[float, float] = (8, 8),
         obstacles: list[Obstacle] = [],
         enlarge_range: float = 0.0,
@@ -107,7 +106,7 @@ class SimpleHistory(History):
 
     def animate(
         self,
-        xlim: list[float], ylim: list[float],
+        xlim: list[float] = None, ylim: list[float] = None,
         figsize: tuple[float, float] = (8, 8),
         start_step: int = 0, end_step: int = None,
         start_pos: np.ndarray = None, goal_pos: np.ndarray = None,
@@ -136,7 +135,7 @@ class SimpleHistory(History):
         )
         plt.close()
 
-    def animate_one_step(self, i: int, ax, xlim: list, ylim: list, elems: list, start_step: int, draw_waypoints_flag: bool, draw_sensing_results_flag: bool, draw_sensing_points_flag: bool, draw_sensing_area_flag: bool, pbar):
+    def animate_one_step(self, i: int, ax: Axes, xlim: list, ylim: list, elems: list, start_step: int, draw_waypoints_flag: bool, draw_sensing_results_flag: bool, draw_sensing_points_flag: bool, draw_sensing_area_flag: bool, pbar: tqdm):
         while elems:
             elems.pop().remove()
 
@@ -205,7 +204,7 @@ class HistoryWithKalmanFilter(SimpleHistory):
 
     def draw(
         self,
-        xlim: list[float], ylim: list[float],
+        xlim: list[float] = None, ylim: list[float] = None,
         figsize: tuple[float, float] = (8, 8),
         obstacles: list[Obstacle] = [],
         enlarge_range: float = 0.0,
@@ -229,7 +228,7 @@ class HistoryWithKalmanFilter(SimpleHistory):
 
     def animate(
         self,
-        xlim: list[float], ylim: list[float],
+        xlim: list[float] = None, ylim: list[float] = None,
         figsize: tuple[float, float] = (8, 8),
         start_step: int = 0, end_step: int = None,
         start_pos: np.ndarray = None, goal_pos: np.ndarray = None,
@@ -259,11 +258,19 @@ class HistoryWithKalmanFilter(SimpleHistory):
         )
         plt.close()
 
-    def animate_one_step(self, i: int, ax, xlim: list, ylim: list, elems: list, start_step: int, draw_waypoints_flag: bool, draw_error_ellipse_flag: bool, draw_sensing_results_flag: bool, draw_sensing_points_flag: bool, draw_sensing_area_flag: bool, pbar):
+    def animate_one_step(
+            self,
+            i: int, ax: Axes,
+            xlim: list, ylim: list, elems: list,
+            start_step: int,
+            draw_waypoints_flag: bool, draw_error_ellipse_flag: bool, draw_sensing_results_flag: bool,
+            draw_sensing_points_flag: bool, draw_sensing_area_flag: bool,
+            pbar: tqdm
+    ):
         while elems:
             elems.pop().remove()
 
-        time_str = "t = %.2f[s]" % (self.time_interval * (start_step + i))
+        time_str = f"t = {self.time_interval * (start_step + i):.2f}[s]"
         elems.append(
             ax.text(
                 xlim[0] * 0.01,

@@ -1,6 +1,6 @@
 import numpy as np
 from rover_simulator.core import SensingPlanner
-from rover_simulator.utils.utils import angle_to_range, isInRange
+from rover_simulator.utils.utils import set_angle_into_range, is_angle_in_range
 
 
 class SimpleSensingPlanner(SensingPlanner):
@@ -22,12 +22,12 @@ class SimpleSensingPlanner(SensingPlanner):
         if dist > self.sense_interval_distance:
             self.previous_sensing_pose = rover_pose
             return True
-        d_theta = angle_to_range(
+        d_theta = set_angle_into_range(
             np.arctan2(
                 rover_pose[1] - self.previous_sensing_pose[1], rover_pose[0] - self.previous_sensing_pose[0]
             ) - self.previous_sensing_pose[2]
         )
-        if dist > 1e-5 and not isInRange(d_theta, -self.sense_interval_angle, self.sense_interval_angle):
+        if dist > 1e-5 and not is_angle_in_range(d_theta, -self.sense_interval_angle, self.sense_interval_angle):
             # dist > 1e-5 => Not Moved
             self.previous_sensing_pose = rover_pose
             return True

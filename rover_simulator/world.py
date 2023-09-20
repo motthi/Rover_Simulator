@@ -1,11 +1,10 @@
-from __future__ import annotations
 import re
 import sys
 import numpy as np
 import matplotlib.animation as anm
 import matplotlib.pyplot as plt
 from scipy.spatial import cKDTree
-from rover_simulator.core import*
+from rover_simulator.core import *
 from rover_simulator.utils.draw import *
 
 if 'google.colab' in sys.modules:
@@ -131,7 +130,7 @@ class World():
         start_pos: np.ndarray = None,
         goal_pos: np.ndarray = None,
         enlarge_range: float = 0.0,
-        legend_flag:bool = False,
+        legend_flag: bool = False,
         draw_waypoints_flag: bool = False,
         draw_sensing_results_flag: bool = False,
         draw_sensing_points_flag: bool = True,
@@ -155,7 +154,7 @@ class World():
 
     def animate(
         self,
-        xlim: list[float], ylim: list[float],
+        xlim: list[float] = None, ylim: list[float] = None,
         figsize: tuple[float, float] = (8, 8),
         start_step: int = 0, end_step: int = None,
         start_pos: np.ndarray = None, goal_pos: np.ndarray = None,
@@ -180,7 +179,12 @@ class World():
         )
         plt.close()
 
-    def animate_one_step(self, i: int, ax, xlim: list, ylim: list, elems: list, start_step: int, draw_waypoints_flag: bool, draw_sensing_points_flag: bool, draw_sensing_area_flag: bool, pbar:tqdm):
+    def animate_one_step(
+            self,
+            i: int, ax: Axes, xlim: list, ylim: list, elems: list, start_step: int,
+            draw_waypoints_flag: bool, draw_sensing_points_flag: bool, draw_sensing_area_flag: bool,
+            pbar: tqdm
+    ):
         while elems:
             elems.pop().remove()
 
@@ -208,7 +212,7 @@ class World():
 
         pbar.update(1) if not pbar is None else None
 
-    def save_animation(self, src, writer='ffmpeg'):
+    def save_animation(self, src: str, writer='ffmpeg'):
         if self.ani:
             self.ani.save(src, writer=writer)
         else:

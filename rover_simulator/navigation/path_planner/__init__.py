@@ -1,5 +1,3 @@
-
-
 class PathNotCalculatedError(Exception):
     pass
 
@@ -14,4 +12,3 @@ class PathPlanner():
 
     def calculate_path(self):
         raise NotImplementedError
-

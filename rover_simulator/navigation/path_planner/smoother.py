@@ -7,7 +7,7 @@ class PathSmoother:
 
 
 class SplineSmoother(PathSmoother):
-    def __init__(self, n_interpolate=10):
+    def __init__(self, n_interpolate: int = 10):
         self.n_interpolate = n_interpolate
 
     def calculate(self, path: np.ndarray) -> np.ndarray:
@@ -22,7 +22,7 @@ class SplineSmoother(PathSmoother):
 
 
 class IterativeSmoother(PathSmoother):
-    def __init__(self, n_iter=100, alpha=0.1, beta=0.1):
+    def __init__(self, n_iter: int = 100, alpha: float = 0.1, beta: float = 0.1):
         self.n_iter = n_iter
         self.alpha = alpha
         self.beta = beta

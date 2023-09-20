@@ -5,6 +5,8 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from matplotlib.colors import LinearSegmentedColormap
 from matplotlib.patches import Ellipse
+from matplotlib.figure import Figure
+from matplotlib.animation import FuncAnimation
 from matplotlib.axes import Axes
 from rover_simulator.core import Obstacle
 
@@ -31,7 +33,7 @@ environment_cmap = LinearSegmentedColormap(
 )
 
 
-def set_fig_params(figsize:tuple, xlim:list=None, ylim:list=None, axes_setting:list=None):
+def set_fig_params(figsize: tuple = (8, 8), xlim: list = None, ylim: list = None, axes_setting: list = None):
     fig = plt.figure(figsize=figsize)
     if axes_setting:
         ax = fig.add_axes(axes_setting)
@@ -45,15 +47,15 @@ def set_fig_params(figsize:tuple, xlim:list=None, ylim:list=None, axes_setting:l
     return fig, ax
 
 
-def save_fig(src, fig, dpi=300):
+def save_fig(src: str, fig: Figure, dpi: int = 300):
     fig.savefig(src, dpi=dpi, bbox_inches="tight", pad_inches=0.05)
 
 
-def save_ani(src, ani, dpi=300):
+def save_ani(src: str, ani: FuncAnimation, dpi: int = 300):
     ani.save(src, dpi=dpi)
 
 
-def draw_rover(ax: Axes, pose, r, color=None):
+def draw_rover(ax: Axes, pose: np.ndarray, r: float, color=None):
     x, y, theta = pose
     xn = x + r * np.cos(theta)
     yn = y + r * np.sin(theta)
@@ -77,7 +79,7 @@ def draw_goal(ax: Axes, goal_pos: np.ndarray) -> None:
     ax.plot(goal_pos[0], goal_pos[1], "xr", label="goal")
 
 
-def draw_pose(ax: Axes, pose, color, alpha=1.0) -> None:
+def draw_pose(ax: Axes, pose: np.ndarray, color: str = "black", alpha: float = 1.0) -> None:
     ax.plot(
         [e[0] for e in pose],
         [e[1] for e in pose],
@@ -88,7 +90,7 @@ def draw_pose(ax: Axes, pose, color, alpha=1.0) -> None:
     )
 
 
-def draw_poses(ax: Axes, poses, color, linestyle="-", alpha=1.0) -> None:
+def draw_poses(ax: Axes, poses: np.ndarray, color: str = "black", linestyle: str = "-", alpha: float = 1.0) -> None:
     ax.plot(
         [e[0] for e in poses],
         [e[1] for e in poses],
@@ -99,7 +101,7 @@ def draw_poses(ax: Axes, poses, color, linestyle="-", alpha=1.0) -> None:
     )
 
 
-def draw_error_ellipses(ax: Axes, poses, covs, color="blue", plot_interval=10):
+def draw_error_ellipses(ax: Axes, poses: np.ndarray, covs: np.ndarray, color: str = "blue", plot_interval: int = 10):
     for i, (p, cov) in enumerate(zip(poses, covs)):
         if i % plot_interval == 0:
             e = sigma_ellipse(p[0:2], cov[0:2, 0:2], 3, color=color)
@@ -111,11 +113,11 @@ def draw_error_ellipses(ax: Axes, poses, covs, color="blue", plot_interval=10):
             ax.plot(xs, ys, color=color, alpha=0.5)
 
 
-def draw_waypoints(ax: Axes, waypoints: np.ndarray, color) -> None:
+def draw_waypoints(ax: Axes, waypoints: np.ndarray, color: str) -> None:
     ax.plot(waypoints[:, 0], waypoints[:, 1], linewidth=1.0, linestyle="-", color=color)
 
 
-def draw_grid(idx: np.ndarray, grid_width: float, color: str, alpha: float, ax, elems=None, fill=True) -> None:
+def draw_grid(idx: np.ndarray, grid_width: float, color: str, alpha: float, ax: Axes, elems=None, fill=True) -> None:
     xy = idx * grid_width - grid_width / 2
     r = patches.Rectangle(
         xy=(xy),
@@ -139,7 +141,7 @@ def draw_grid_map_contour(ax: Axes, grid_map, grid_num, grid_width, levels):
     ax.clabel(cntr)
 
 
-def draw_grid_map(ax: Axes, grid_map, cmap, vmin, vmax, alpha, extent, zorder, colorbar=True):
+def draw_grid_map(ax: Axes, grid_map, cmap=None, vmin=None, vmax=None, alpha=None, extent=None, zorder=None, colorbar=True):
     grid_map = cv2.rotate(grid_map, cv2.ROTATE_90_COUNTERCLOCKWISE)
     im = ax.imshow(
         grid_map,
@@ -157,7 +159,7 @@ def occupancyToColor(occupancy: float) -> str:
     return "#" + format(int(255 * (1 - occupancy)), '02x') * 3
 
 
-def sigma_ellipse(p, cov, n, color="blue"):
+def sigma_ellipse(p: np.ndarray, cov: np.ndarray, n, color="blue"):
     eig_vals, eig_vec = np.linalg.eig(cov)
     ang = math.atan2(eig_vec[:, 0][1], eig_vec[:, 0][0]) / math.pi * 180
     return Ellipse(p, width=2 * n * math.sqrt(eig_vals[0]), height=2 * n * math.sqrt(eig_vals[1]), angle=ang, fill=False, color=color, alpha=0.5, zorder=5)
@@ -207,7 +209,7 @@ def draw_history_pose_with_error_ellipse(ax: Axes, elems: list, poses: list, cov
 
 
 def draw_history_sensing_results(
-    ax:Axes, elems: list,
+    ax: Axes, elems: list,
     real_pose: np.ndarray, estimated_pose: np.ndarray,
     sensed_obstacles: list, rover_r: float, sensor_range: float, sensor_fov: float,
     draw_sensing_points_flag: bool, draw_sensing_area_flag: bool
@@ -239,7 +241,7 @@ def draw_history_sensing_results(
             elems.append(ax.add_patch(enl_obs))
 
 
-def draw_history_waypoints(ax:Axes, elems: list, waypoints_list: list, step: int) -> None:
+def draw_history_waypoints(ax: Axes, elems: list, waypoints_list: list, step: int) -> None:
     waypoints = waypoints_list[step]
     elems += ax.plot(
         [e[0] for e in waypoints],

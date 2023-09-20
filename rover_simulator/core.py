@@ -1,6 +1,34 @@
-from __future__ import annotations
 import numpy as np
 import matplotlib.patches as patches
+from matplotlib.axes import Axes
+
+
+class History():
+    real_poses: list
+    estimated_poses: list
+    waypoints: list
+    sensing_results: list
+    waypoint_color: str
+
+    def __init__(self):
+        pass
+
+    def draw(self):
+        raise NotImplementedError
+
+    def append(self):
+        raise NotImplementedError
+
+
+class Sensor():
+    range: float
+    fov: float
+
+    def __init__(self) -> None:
+        pass
+
+    def sense(self) -> list[dict]:
+        raise NotImplementedError
 
 
 class Rover():
@@ -28,17 +56,6 @@ class Localizer():
         raise NotImplementedError
 
 
-class Sensor():
-    range: float
-    fov: float
-
-    def __init__(self) -> None:
-        pass
-
-    def sense(self) -> list[dict]:
-        raise NotImplementedError
-
-
 class Controller():
     def __init__(self) -> None:
         pass
@@ -61,10 +78,10 @@ class Obstacle():
         self.r = radius
         self.type = type
 
-    def draw(self, ax, enlarge_range, alpha, color_enlarge='black') -> None:
+    def draw(self, ax: Axes, enlarge_range: float, alpha: float = 1.0, color_enlarge: str = 'black') -> None:
         enl_obs = patches.Circle(xy=(self.pos[0], self.pos[1]), radius=self.r + enlarge_range, fc=color_enlarge, ec=color_enlarge, zorder=-1.0, alpha=alpha)
-        ax.add_patch(enl_obs)
         obs = patches.Circle(xy=(self.pos[0], self.pos[1]), radius=self.r, fc='black', ec='black', zorder=-1.0, alpha=alpha)
+        ax.add_patch(enl_obs)
         ax.add_patch(obs)
 
 
@@ -82,20 +99,3 @@ class SensingPlanner():
 
     def decide(self, *args, **kwargs) -> None:
         return True
-
-
-class History():
-    real_poses: list
-    estimated_poses: list
-    waypoints: list
-    sensing_results: list
-    waypoint_color: str
-
-    def __init__(self):
-        pass
-
-    def draw(self):
-        raise NotImplementedError
-
-    def append(self):
-        raise NotImplementedError
