@@ -5,6 +5,7 @@ import math
 import numpy as np
 import matplotlib.animation as anm
 import matplotlib.pyplot as plt
+import matplotlib.patches as patches
 from matplotlib.axes import Axes
 from scipy.spatial import cKDTree
 from rover_simulator.navigation.path_planner import PathPlanner
@@ -21,6 +22,8 @@ elif 'ipykernel' in sys.modules:
 else:
     from tqdm import tqdm    # ipython, python script, ...
 
+def rotation_matrix(t):
+    return np.array([[np.cos(t), -np.sin(t)], [np.sin(t),  np.cos(t)]])
 
 class RRT(PathPlanner):
     class Node():
@@ -323,7 +326,6 @@ class RRT(PathPlanner):
             self.draw_path(ax)
         pbar.update(1)
 
-
 class RRTstar(RRT):
     def __init__(
         self,
@@ -581,6 +583,83 @@ class RRTstar(RRT):
 
         pbar.update(1)
 
+class InformedRRTstar(RRTstar):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.reached_goal = False
+        self.a = float('inf')
+        self.b = float('inf')
+        self.c_min = np.linalg.norm(self.goal_pos[:2] - self.start_pos[:2])
+        self.e_theta = np.arctan2(self.goal_pos[1]-self.start_pos[1], self.goal_pos[0]-self.start_pos[0])
+
+    def calculate_path(self, max_iter=500, log_history=False, *kargs):
+        if self.start_node is None:
+            raise ValueError("start_node is None")
+        if self.goal_node is None:
+            raise ValueError("goal_node is None")
+
+        self.node_list = [self.start_node]
+        self.nodes_history.append(copy.deepcopy(self.node_list)) if log_history is True else None
+        for _ in range(max_iter):
+            rnd = self.sample_new_node()
+            nearest_node = self.get_nearest_node(self.node_list, rnd)
+            new_node = self.steer(nearest_node, rnd, self.expand_dis)
+            new_node.cost = nearest_node.cost + self.cost(self.to_pose(new_node), self.to_pose(nearest_node))
+
+            if self.calc_dist_to_goal(new_node.x, new_node.y) < 1e-5:
+                self.reached_goal = True
+
+            if self.check_collision(new_node, self.obstacle_list):
+                near_inds = self.find_near_nodes(new_node)
+                node_with_updated_parent = self.choose_parent(new_node, near_inds)
+                if node_with_updated_parent:
+                    self.rewire(node_with_updated_parent, near_inds)
+                    self.node_list.append(node_with_updated_parent)
+                else:
+                    self.node_list.append(new_node)
+                self.nodes_history.append(copy.deepcopy(self.node_list)) if log_history is True else None
+
+                if self.reached_goal:
+                    # distance to the goal
+                    path = self.generate_final_course(len(self.node_list) - 1)
+                    dist = 0
+                    for i in range(len(path) - 1):
+                        dist += self.cost(self.to_pose(path[i]), self.to_pose(path[i + 1]))
+                    self.a = dist / 2
+                    self.b = np.sqrt(dist ** 2 - self.c_min ** 2) / 2
+
+            # if not self.search_until_max_iter and new_node:  # if reaches goal
+            #     last_idx = self.search_best_goal_node()
+            #     if last_idx is not None:
+            #         return self.generate_final_course(last_idx)
+
+        last_idx = self.search_best_goal_node()
+        if last_idx is not None:
+            self.planned_path = self.generate_final_course(last_idx)
+            return np.array([[n.x, n.y] for n in self.planned_path])
+        return []
+    
+    def sample_new_node(self) -> RRT.Node:
+        if self.reached_goal:
+            # if(np.isnan(self.a) or np.isnan(self.b)):
+            #     return super().sample_new_node()
+            theta = 2 * random.random() * np.pi - np.pi
+            x = np.sqrt(random.random()) * np.array([np.cos(theta) * self.a, np.sin(theta) * self.b])
+            xp = np.dot(rotation_matrix(self.e_theta), x) + (self.start_pos[:2] + self.goal_pos[:2]) / 2
+            return self.Node(xp[0], xp[1])
+        else:
+            return super().sample_new_node()
+        
+    def drawEllipse(self, ax, elems):
+        e = patches.Ellipse(
+            xy=(self.start_cordinate+self.goal_cordinate)/2,
+            width=self.a*2,
+            height=self.b*2,
+            angle=np.rad2deg(self.e_theta),
+            ec='black',
+            fill=False
+        )
+        elems.append(ax.add_patch(e))
 
 class ChanceConstrainedRRT(RRT):
     class Node(RRT.Node):
