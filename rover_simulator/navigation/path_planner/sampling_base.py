@@ -591,23 +591,26 @@ class InformedRRTstar(RRTstar):
         self.b = float('inf')
         self.c_min = np.linalg.norm(self.goal_pos[:2] - self.start_pos[:2])
         self.e_theta = np.arctan2(self.goal_pos[1]-self.start_pos[1], self.goal_pos[0]-self.start_pos[0])
+        self.sample_area_history = []
+        self.best_path_history = []
 
     def calculate_path(self, max_iter=500, log_history=False, *kargs):
         if self.start_node is None:
             raise ValueError("start_node is None")
         if self.goal_node is None:
             raise ValueError("goal_node is None")
-
+    
+        self.reached_goal = False
         self.node_list = [self.start_node]
-        self.nodes_history.append(copy.deepcopy(self.node_list)) if log_history is True else None
+        if log_history:
+            self.nodes_history.append(copy.deepcopy(self.node_list))
+            self.sample_area_history.append([self.a, self.b, self.e_theta])
+            self.best_path_history.append([])
         for _ in range(max_iter):
             rnd = self.sample_new_node()
             nearest_node = self.get_nearest_node(self.node_list, rnd)
             new_node = self.steer(nearest_node, rnd, self.expand_dis)
             new_node.cost = nearest_node.cost + self.cost(self.to_pose(new_node), self.to_pose(nearest_node))
-
-            if self.calc_dist_to_goal(new_node.x, new_node.y) < 1e-5:
-                self.reached_goal = True
 
             if self.check_collision(new_node, self.obstacle_list):
                 near_inds = self.find_near_nodes(new_node)
@@ -617,16 +620,26 @@ class InformedRRTstar(RRTstar):
                     self.node_list.append(node_with_updated_parent)
                 else:
                     self.node_list.append(new_node)
-                self.nodes_history.append(copy.deepcopy(self.node_list)) if log_history is True else None
+                if self.calc_dist_to_goal(new_node.x, new_node.y) < 1e-5:
+                    self.reached_goal = True
 
+
+            if self.reached_goal:
+                last_idx = self.search_best_goal_node()
+                path = self.generate_final_course(last_idx)
+                dist = 0
+                for i in range(len(path) - 1):
+                    dist += self.cost(self.to_pose(path[i]), self.to_pose(path[i + 1]))
+                self.a = dist / 2
+                self.b = np.sqrt(dist ** 2 - self.c_min ** 2) / 2
+
+            if log_history:
+                self.nodes_history.append(copy.deepcopy(self.node_list))
+                self.sample_area_history.append([self.a, self.b, self.e_theta])
                 if self.reached_goal:
-                    # distance to the goal
-                    path = self.generate_final_course(len(self.node_list) - 1)
-                    dist = 0
-                    for i in range(len(path) - 1):
-                        dist += self.cost(self.to_pose(path[i]), self.to_pose(path[i + 1]))
-                    self.a = dist / 2
-                    self.b = np.sqrt(dist ** 2 - self.c_min ** 2) / 2
+                    self.best_path_history.append(copy.deepcopy(path))
+                else:
+                    self.best_path_history.append([])
 
             # if not self.search_until_max_iter and new_node:  # if reaches goal
             #     last_idx = self.search_best_goal_node()
@@ -649,15 +662,50 @@ class InformedRRTstar(RRTstar):
             return self.Node(xp[0], xp[1])
         else:
             return super().sample_new_node()
+
+    def animate_one_step(self, i: int, ax: Axes, elems: list, xlim: list, ylim: list, pbar: tqdm):
+        while elems:
+            elems.pop().remove()
+
+        elems.append(
+            ax.text(
+                xlim[0] * 0.01,
+                ylim[1] * 1.02,
+                f"steps = {i}",
+                fontsize=10
+            )
+        )
+
+        # draw nodes
+        if i < len(self.nodes_history):
+            nodes = self.nodes_history[i]
+        else:
+            nodes = self.nodes_history[-1]
+        for node in nodes:
+            if node.parent:
+                elems += ax.plot(node.path_x, node.path_y, c="cyan")
         
-    def drawEllipse(self, ax, elems):
+        a, b, e_th = self.sample_area_history[i]
+        self.drawEllipse(ax, elems, a, b, e_th)
+
+        # draw path
+        for node in self.best_path_history[i]:
+            if node.parent:
+                elems += ax.plot(node.path_x, node.path_y, c="red")
+
+        pbar.update(1)
+
+    def drawEllipse(self, ax:Axes, elems:list, a:float, b:float, e_th:float):
+        if a == float('inf') or b == float('inf'):
+            return
+        xy = (self.start_pos[:2] + self.goal_pos[:2]) / 2
         e = patches.Ellipse(
-            xy=(self.start_cordinate+self.goal_cordinate)/2,
-            width=self.a*2,
-            height=self.b*2,
-            angle=np.rad2deg(self.e_theta),
-            ec='black',
-            fill=False
+            xy=(xy[0], xy[1]),
+            width = a * 2,
+            height = b * 2,
+            angle = np.rad2deg(e_th),
+            ec = 'black',
+            fill = False
         )
         elems.append(ax.add_patch(e))
 
