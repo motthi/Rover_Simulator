@@ -78,16 +78,14 @@ class World():
     def read_objects(self, setting_file_path):
         f = open(setting_file_path)
         f_lines = f.readlines()
-        pattern_float_num = r'[+-]?(?:\d+\.?\d*|\.\d+)(?:(?:[eE][+-]?\d+)|(?:\*10\^[+-]?\d+))?'
-        pattern = r'Obstacle,\s*(' + pattern_float_num + r'),\s*(' + pattern_float_num + r'),\s*(' + pattern_float_num + r'),\s*(' + pattern_float_num + r')'
         for f_line in f_lines:
-            match = re.search(pattern=pattern, string=f_line)
-            if match is not None:
-                x = float(match.group(1))
-                y = float(match.group(2))
-                r = float(match.group(3))
-                t = int(match.group(4))
-                self.append_obstacle(Obstacle(np.array([x, y]), r, t))
+            f_line = f_line.split(',')
+            if f_line[0] == 'Obstacle':
+                if f_line[1] == 'Circle':
+                    self.append_obstacle(CircularObstacle(np.array([float(f_line[2]), float(f_line[3])]), float(f_line[4])))
+                elif f_line[1] == 'Rectangle':
+                    self.append_obstacle(RectangularObstacle(np.array([float(f_line[2]), float(f_line[3])]), float(f_line[4]), float(f_line[5]), float(f_line[6])))
+
 
     def append_rover(self, rover: Rover):
         self.rovers.append(rover)
@@ -130,6 +128,7 @@ class World():
         start_pos: np.ndarray = None,
         goal_pos: np.ndarray = None,
         enlarge_range: float = 0.0,
+        enlarge_color: str = 'gray',
         legend_flag: bool = False,
         draw_waypoints_flag: bool = False,
         draw_sensing_results_flag: bool = False,
@@ -137,7 +136,7 @@ class World():
         draw_sensing_area_flag: bool = True
     ):
         self.fig, ax = set_fig_params(figsize, xlim, ylim)
-        draw_obstacles(ax, self.obstacles, enlarge_range)
+        draw_obstacles(ax, self.obstacles, enlarge_range, 1.0, enlarge_color)
 
         for rover in self.rovers:
             if rover.history:

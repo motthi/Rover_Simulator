@@ -66,9 +66,9 @@ def draw_rover(ax: Axes, pose: np.ndarray, r: float, color=None):
     ax.add_patch(cir)
 
 
-def draw_obstacles(ax: Axes, obstacles: list[Obstacle], enlarge_range, alpha=1.0):
+def draw_obstacles(ax: Axes, obstacles: list[Obstacle], enlarge_range, alpha=1.0, color_enlarge='gray') -> None:
     for obstacle in obstacles:
-        obstacle.draw(ax, enlarge_range, alpha)
+        obstacle.draw(ax, enlarge_range, alpha, color_enlarge)
 
 
 def draw_start(ax: Axes, start_pos: np.ndarray) -> None:

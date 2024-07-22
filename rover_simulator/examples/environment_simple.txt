@@ -1,5 +1,5 @@
-Obstacle,	15.0,	10.0,	1.0,	1
-Obstacle,	5.0,	17.0,	0.2,	1
-Obstacle,	4.0,	8.0,	0.6,	1
-Obstacle,	10.0,	13.0,	0.8,	1
-Obstacle,	13.0,	4.0,	0.4,	1
+Obstacle,Circle,15.0,10.0,1.0
+Obstacle,Circle,5.0,17.0,0.2
+Obstacle,Circle,4.0,8.0,0.6
+Obstacle,Circle,13.0,4.0,0.4
+Obstacle,Rectangle,10,10,2,5,30.0
