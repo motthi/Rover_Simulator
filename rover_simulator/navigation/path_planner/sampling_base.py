@@ -58,6 +58,7 @@ class RRT(PathPlanner):
         self.goal_sample_rate = goal_sample_rate
         self.expand_dis = expand_distance
         self.path_resolution = path_resolution
+        self.enlarge_range = enlarge_range
         if cost_func is None:
             self.cost = self.dist_nodes
         else:
@@ -66,9 +67,9 @@ class RRT(PathPlanner):
         self.planned_path = []
 
         self.known_obstacles = known_obstacles
-        self.obstacle_list = [np.array([obstacle.pos[0], obstacle.pos[1], obstacle.r + enlarge_range]) for obstacle in known_obstacles]
-        obstacle_positions = [obstacle.pos for obstacle in known_obstacles] if not known_obstacles is None else None
-        self.obstacle_kdTree = cKDTree(obstacle_positions)
+        self.obstacle_list:list[Obstacle] = known_obstacles
+        # obstacle_positions = [obstacle.pos for obstacle in known_obstacles] if not known_obstacles is None else None
+        # self.obstacle_kdTree = cKDTree(obstacle_positions)
         self.name = "RRT"
 
     def dist_nodes(self, pose1: np.ndarray, pose2: np.ndarray) -> float:
@@ -148,15 +149,13 @@ class RRT(PathPlanner):
         minind = dlist.index(min(dlist))
         return minind
 
-    def check_collision(self, node, obstacle_list):
+    def check_collision(self, node: Node, obstacle_list: list[Obstacle]):
         if node is None:
             return False
-        for (ox, oy, size) in obstacle_list:
-            dx_list = [ox - x for x in node.path_x]
-            dy_list = [oy - y for y in node.path_y]
-            d_list = [dx * dx + dy * dy for (dx, dy) in zip(dx_list, dy_list)]
-            if min(d_list) <= size**2:
-                return False  # collision
+        for obs in obstacle_list:
+            for x1, y1, x2, y2 in zip(node.path_x[:-1], node.path_y[:-1], node.path_x[1:], node.path_y[1:]):
+                if obs.check_collision_line(np.array([x1, y1]), np.array([x2, y2]), self.enlarge_range):
+                    return False # collision
         return True  # safe
 
     def calc_dist_to_goal(self, x, y):
@@ -352,6 +351,7 @@ class RRTstar(RRT):
         self.search_until_max_iter = search_until_max_iter
         self.nodes_history = []
         self.path_history = []
+        self.best_path_history = []
         self.name = "RRTstar"
 
     def calculate_path(self, max_iter=500, log_history=False, *kargs):
@@ -360,8 +360,11 @@ class RRTstar(RRT):
         if self.goal_node is None:
             raise ValueError("goal_node is None")
 
+        self.reached_goal = False
         self.node_list = [self.start_node]
-        self.nodes_history.append(copy.deepcopy(self.node_list)) if log_history is True else None
+        if log_history:
+            self.nodes_history.append(copy.deepcopy(self.node_list))
+            self.best_path_history.append([])
         for _ in range(max_iter):
             rnd = self.sample_new_node()
             nearest_node = self.get_nearest_node(self.node_list, rnd)
@@ -376,7 +379,18 @@ class RRTstar(RRT):
                     self.node_list.append(node_with_updated_parent)
                 else:
                     self.node_list.append(new_node)
-                self.nodes_history.append(copy.deepcopy(self.node_list)) if log_history is True else None
+                
+
+            if log_history:
+                self.nodes_history.append(copy.deepcopy(self.node_list))
+                if not self.reached_goal and self.calc_dist_to_goal(new_node.x, new_node.y) < 1e-5:
+                    self.reached_goal = True
+                if self.reached_goal:
+                    last_idx = self.search_best_goal_node()
+                    path = self.generate_final_course(last_idx)
+                    self.best_path_history.append(copy.deepcopy(path))
+                else:
+                    self.best_path_history.append([])
 
             # if not self.search_until_max_iter and new_node:  # if reaches goal
             #     last_idx = self.search_best_goal_node()
@@ -580,6 +594,9 @@ class RRTstar(RRT):
                 elems += ax.plot(x, y, c="cyan")
 
         # draw path
+        for node in self.best_path_history[i]:
+            if node.parent:
+                elems += ax.plot(node.path_x, node.path_y, c="red")
 
         pbar.update(1)
 
@@ -592,7 +609,6 @@ class InformedRRTstar(RRTstar):
         self.c_min = np.linalg.norm(self.goal_pos[:2] - self.start_pos[:2])
         self.e_theta = np.arctan2(self.goal_pos[1]-self.start_pos[1], self.goal_pos[0]-self.start_pos[0])
         self.sample_area_history = []
-        self.best_path_history = []
 
     def calculate_path(self, max_iter=500, log_history=False, *kargs):
         if self.start_node is None:
@@ -622,7 +638,6 @@ class InformedRRTstar(RRTstar):
                     self.node_list.append(new_node)
                 if self.calc_dist_to_goal(new_node.x, new_node.y) < 1e-5:
                     self.reached_goal = True
-
 
             if self.reached_goal:
                 last_idx = self.search_best_goal_node()
@@ -1168,7 +1183,6 @@ class ChanceConstrainedRRT(RRT):
         elif i == len(self.node_list):
             self.draw_path(ax)
         pbar.update(1)
-
 
 class ChanceConstrainedRRTstar(ChanceConstrainedRRT):
     def __init__(
