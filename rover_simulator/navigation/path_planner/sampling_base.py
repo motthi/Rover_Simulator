@@ -22,8 +22,10 @@ elif 'ipykernel' in sys.modules:
 else:
     from tqdm import tqdm    # ipython, python script, ...
 
+
 def rotation_matrix(t):
-    return np.array([[np.cos(t), -np.sin(t)], [np.sin(t),  np.cos(t)]])
+    return np.array([[np.cos(t), -np.sin(t)], [np.sin(t), np.cos(t)]])
+
 
 class RRT(PathPlanner):
     class Node():
@@ -67,7 +69,7 @@ class RRT(PathPlanner):
         self.planned_path = []
 
         self.known_obstacles = known_obstacles
-        self.obstacle_list:list[Obstacle] = known_obstacles
+        self.obstacle_list: list[Obstacle] = known_obstacles
         # obstacle_positions = [obstacle.pos for obstacle in known_obstacles] if not known_obstacles is None else None
         # self.obstacle_kdTree = cKDTree(obstacle_positions)
         self.name = "RRT"
@@ -155,7 +157,7 @@ class RRT(PathPlanner):
         for obs in obstacle_list:
             for x1, y1, x2, y2 in zip(node.path_x[:-1], node.path_y[:-1], node.path_x[1:], node.path_y[1:]):
                 if obs.check_collision_line(np.array([x1, y1]), np.array([x2, y2]), self.enlarge_range):
-                    return False # collision
+                    return False  # collision
         return True  # safe
 
     def calc_dist_to_goal(self, x, y):
@@ -300,13 +302,11 @@ class RRT(PathPlanner):
             animation_len = len(self.node_list) + 20
         pbar = tqdm(total=animation_len)
         self.ani = anm.FuncAnimation(
-            self.fig, self.animate_one_step, fargs=(ax, elems, xlim, ylim, pbar),
-            frames=animation_len, interval=100,
-            repeat=False
+            self.fig, self.animate_one_step, animation_len, interval=100, repeat=False, fargs=(ax, elems, xlim, ylim, pbar),
         )
         plt.close()
 
-    def animate_one_step(self, i: int, ax: Axes, elems: list, xlim: list, ylim: list, pbar: tqdm):
+    def animate_one_step(self, i: int, ax: Axes, elems: list, xlim: list, ylim: list, pbar):
         while elems:
             elems.pop().remove()
 
@@ -324,6 +324,7 @@ class RRT(PathPlanner):
         elif i == len(self.node_list):
             self.draw_path(ax)
         pbar.update(1)
+
 
 class RRTstar(RRT):
     def __init__(
@@ -379,7 +380,6 @@ class RRTstar(RRT):
                     self.node_list.append(node_with_updated_parent)
                 else:
                     self.node_list.append(new_node)
-                
 
             if log_history:
                 self.nodes_history.append(copy.deepcopy(self.node_list))
@@ -563,13 +563,12 @@ class RRTstar(RRT):
             animation_len = len(self.nodes_history) + 20
         pbar = tqdm(total=animation_len)
         self.ani = anm.FuncAnimation(
-            self.fig, self.animate_one_step, fargs=(ax, elems, xlim, ylim, pbar),
-            frames=animation_len, interval=100,
-            repeat=False
+            self.fig, self.animate_one_step, animation_len, interval=100, repeat=False,
+            fargs=(ax, elems, xlim, ylim, pbar),
         )
         plt.close()
 
-    def animate_one_step(self, i: int, ax: Axes, elems: list, xlim: list, ylim: list, pbar: tqdm):
+    def animate_one_step(self, i: int, ax: Axes, elems: list, xlim: list, ylim: list, pbar):
         while elems:
             elems.pop().remove()
 
@@ -600,6 +599,7 @@ class RRTstar(RRT):
 
         pbar.update(1)
 
+
 class InformedRRTstar(RRTstar):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -607,7 +607,7 @@ class InformedRRTstar(RRTstar):
         self.a = float('inf')
         self.b = float('inf')
         self.c_min = np.linalg.norm(self.goal_pos[:2] - self.start_pos[:2])
-        self.e_theta = np.arctan2(self.goal_pos[1]-self.start_pos[1], self.goal_pos[0]-self.start_pos[0])
+        self.e_theta = np.arctan2(self.goal_pos[1] - self.start_pos[1], self.goal_pos[0] - self.start_pos[0])
         self.sample_area_history = []
 
     def calculate_path(self, max_iter=500, log_history=False, *kargs):
@@ -615,7 +615,7 @@ class InformedRRTstar(RRTstar):
             raise ValueError("start_node is None")
         if self.goal_node is None:
             raise ValueError("goal_node is None")
-    
+
         self.reached_goal = False
         self.node_list = [self.start_node]
         if log_history:
@@ -666,7 +666,7 @@ class InformedRRTstar(RRTstar):
             self.planned_path = self.generate_final_course(last_idx)
             return np.array([[n.x, n.y] for n in self.planned_path])
         return []
-    
+
     def sample_new_node(self) -> RRT.Node:
         if self.reached_goal:
             # if(np.isnan(self.a) or np.isnan(self.b)):
@@ -678,7 +678,7 @@ class InformedRRTstar(RRTstar):
         else:
             return super().sample_new_node()
 
-    def animate_one_step(self, i: int, ax: Axes, elems: list, xlim: list, ylim: list, pbar: tqdm):
+    def animate_one_step(self, i: int, ax: Axes, elems: list, xlim: list, ylim: list, pbar):
         while elems:
             elems.pop().remove()
 
@@ -699,7 +699,7 @@ class InformedRRTstar(RRTstar):
         for node in nodes:
             if node.parent:
                 elems += ax.plot(node.path_x, node.path_y, c="cyan")
-        
+
         a, b, e_th = self.sample_area_history[i]
         self.drawEllipse(ax, elems, a, b, e_th)
 
@@ -710,19 +710,20 @@ class InformedRRTstar(RRTstar):
 
         pbar.update(1)
 
-    def drawEllipse(self, ax:Axes, elems:list, a:float, b:float, e_th:float):
+    def drawEllipse(self, ax: Axes, elems: list, a: float, b: float, e_th: float):
         if a == float('inf') or b == float('inf'):
             return
         xy = (self.start_pos[:2] + self.goal_pos[:2]) / 2
         e = patches.Ellipse(
             xy=(xy[0], xy[1]),
-            width = a * 2,
-            height = b * 2,
-            angle = np.rad2deg(e_th),
-            ec = 'black',
-            fill = False
+            width=a * 2,
+            height=b * 2,
+            angle=np.rad2deg(e_th),
+            ec='black',
+            fill=False
         )
         elems.append(ax.add_patch(e))
+
 
 class ChanceConstrainedRRT(RRT):
     class Node(RRT.Node):
@@ -1155,13 +1156,12 @@ class ChanceConstrainedRRT(RRT):
             animation_len = len(self.node_list) + 20
         pbar = tqdm(total=animation_len)
         self.ani = anm.FuncAnimation(
-            self.fig, self.animate_one_step, fargs=(ax, elems, xlim, ylim, draw_ellipse_flag, pbar),
-            frames=animation_len, interval=interval,
-            repeat=False
+            self.fig, self.animate_one_step, animation_len, interval=interval, repeat=False,
+            fargs=(ax, elems, xlim, ylim, draw_ellipse_flag, pbar),
         )
         plt.close()
 
-    def animate_one_step(self, i: int, ax: Axes, elems: list, xlim: list, ylim: list, draw_ellipse: bool, pbar: tqdm):
+    def animate_one_step(self, i: int, ax: Axes, elems: list, xlim: list, ylim: list, draw_ellipse: bool, pbar):
         while elems:
             elems.pop().remove()
 
@@ -1183,6 +1183,7 @@ class ChanceConstrainedRRT(RRT):
         elif i == len(self.node_list):
             self.draw_path(ax)
         pbar.update(1)
+
 
 class ChanceConstrainedRRTstar(ChanceConstrainedRRT):
     def __init__(
@@ -1330,13 +1331,12 @@ class ChanceConstrainedRRTstar(ChanceConstrainedRRT):
             animation_len = len(self.nodes_history)
         pbar = tqdm(total=animation_len)
         self.ani = anm.FuncAnimation(
-            self.fig, self.animate_one_step, fargs=(ax, elems, xlim, ylim, draw_ellipse_flag, pbar),
-            frames=animation_len, interval=100,
-            repeat=False
+            self.fig, self.animate_one_step, animation_len, interval=100, repeat=False,
+            fargs=(ax, elems, xlim, ylim, draw_ellipse_flag, pbar),
         )
         plt.close()
 
-    def animate_one_step(self, i: int, ax: Axes, elems: list, xlim: list, ylim: list, draw_ellipse_flag: bool, pbar: tqdm):
+    def animate_one_step(self, i: int, ax: Axes, elems: list, xlim: list, ylim: list, draw_ellipse_flag: bool, pbar):
         while elems:
             elems.pop().remove()
 

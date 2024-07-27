@@ -75,8 +75,8 @@ class World():
         for rover in self.rovers:
             rover.one_step(self.time_interval)
 
-    def read_objects(self, setting_file_path):
-        f = open(setting_file_path)
+    def read_objects(self, src: str):
+        f = open(src)
         f_lines = f.readlines()
         for f_line in f_lines:
             f_line = f_line.split(',')
@@ -171,9 +171,8 @@ class World():
         # Start Animation
         pbar = tqdm(total=end_step - start_step)
         self.ani = anm.FuncAnimation(
-            self.fig, self.animate_one_step, fargs=(ax, xlim, ylim, elems, start_step, draw_waypoints_flag, draw_sensing_points_flag, draw_sensing_results_flag, pbar),
-            frames=end_step - start_step, interval=int(self.time_interval * 1000),
-            repeat=False
+            self.fig, self.animate_one_step, end_step - start_step, interval=int(self.time_interval * 1000), repeat=False,
+            fargs=(ax, xlim, ylim, elems, start_step, draw_waypoints_flag, draw_sensing_points_flag, draw_sensing_results_flag, pbar)
         )
         plt.close()
 
@@ -181,7 +180,7 @@ class World():
             self,
             i: int, ax: Axes, xlim: list, ylim: list, elems: list, start_step: int,
             draw_waypoints_flag: bool, draw_sensing_points_flag: bool, draw_sensing_results_flag: bool,
-            pbar: tqdm
+            pbar
     ):
         while elems:
             elems.pop().remove()
@@ -196,10 +195,11 @@ class World():
         )
 
         for rover in self.rovers:
-            draw_history_pose(ax, elems, rover.history.estimated_poses, rover.r, rover.color, i, start_step)
-            draw_history_pose(ax, elems, rover.history.real_poses, rover.r, rover.color, i, start_step)
-            draw_history_waypoints(ax, elems, rover.history.waypoints, rover.history.waypoints_colors, start_step + i) if draw_waypoints_flag and len(rover.history.waypoints) != 0 else None
-            rover.sensor.draw(ax, elems, rover.history.sensing_results[start_step + i], rover.history.real_poses[start_step + i]) if draw_sensing_results_flag else None
+            if rover.history:
+                draw_history_pose(ax, elems, rover.history.estimated_poses, rover.r, rover.color, i, start_step)
+                draw_history_pose(ax, elems, rover.history.real_poses, rover.r, rover.color, i, start_step)
+                draw_history_waypoints(ax, elems, rover.history.waypoints, rover.history.waypoints_colors, start_step + i) if draw_waypoints_flag and len(rover.history.waypoints) != 0 else None
+                rover.sensor.draw(ax, elems, rover.history.sensing_results[start_step + i], rover.history.real_poses[start_step + i]) if draw_sensing_results_flag else None
 
         pbar.update(1) if not pbar is None else None
 

@@ -122,13 +122,13 @@ class SimpleHistory(History):
         # Start Animation
         pbar = tqdm(total=end_step - start_step)
         self.ani = anm.FuncAnimation(
-            self.fig, self.animate_one_step, fargs=(ax, xlim, ylim, elems, start_step, draw_waypoints_flag, draw_sensing_results_flag, draw_sensing_points_flag, pbar),
-            frames=end_step - start_step, interval=int(self.time_interval * 1000),
+            self.fig, self.animate_one_step, end_step - start_step, interval=int(self.time_interval * 1000),
+            fargs=(ax, xlim, ylim, elems, start_step, draw_waypoints_flag, draw_sensing_results_flag, draw_sensing_points_flag, pbar),
             repeat=False
         )
         plt.close()
 
-    def animate_one_step(self, i: int, ax: Axes, xlim: list, ylim: list, elems: list, start_step: int, draw_waypoints_flag: bool, draw_sensing_results_flag: bool, draw_sensing_points_flag: bool, pbar: tqdm):
+    def animate_one_step(self, i: int, ax: Axes, xlim: list, ylim: list, elems: list, start_step: int, draw_waypoints_flag: bool, draw_sensing_results_flag: bool, draw_sensing_points_flag: bool, pbar):
         while elems:
             elems.pop().remove()
 
@@ -243,9 +243,8 @@ class HistoryWithKalmanFilter(SimpleHistory):
         # Start Animation
         pbar = tqdm(total=end_step - start_step)
         self.ani = anm.FuncAnimation(
-            self.fig, self.animate_one_step, fargs=(ax, xlim, ylim, elems, start_step, draw_waypoints_flag, draw_error_ellipse_flag, draw_sensing_results_flag, draw_sensing_points_flag, draw_sensing_area_flag, pbar),
-            frames=end_step - start_step, interval=int(self.time_interval * 1000),
-            repeat=False
+            self.fig, self.animate_one_step, end_step - start_step, interval=int(self.time_interval * 1000), repeat=False,
+            fargs=(ax, xlim, ylim, elems, start_step, draw_waypoints_flag, draw_error_ellipse_flag, draw_sensing_results_flag, draw_sensing_points_flag, draw_sensing_area_flag, pbar),
         )
         plt.close()
 
@@ -256,7 +255,7 @@ class HistoryWithKalmanFilter(SimpleHistory):
             start_step: int,
             draw_waypoints_flag: bool, draw_error_ellipse_flag: bool, draw_sensing_results_flag: bool,
             draw_sensing_points_flag: bool, draw_sensing_area_flag: bool,
-            pbar: tqdm
+            pbar
     ):
         while elems:
             elems.pop().remove()

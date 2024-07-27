@@ -35,6 +35,7 @@ environment_cmap = LinearSegmentedColormap(
 
 def set_fig_params(figsize: tuple = (8, 8), xlim: list = None, ylim: list = None, axes_setting: list = None):
     fig = plt.figure(figsize=figsize)
+    plt.subplots_adjust(left=0.1, right=0.95, bottom=0.1, top=0.95)
     if axes_setting:
         ax = fig.add_axes(axes_setting)
     else:

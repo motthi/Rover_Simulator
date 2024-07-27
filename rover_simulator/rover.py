@@ -68,16 +68,16 @@ class BasicRover(Rover):
         self.mapper.update(self.estimated_pose, sensed_obstacles) if self.mapper is not None else None
 
         # Calculate Control Inputs
-        v, w = self.controller.calculate_control_inputs()
+        v, w = self.controller.calculate_control_inputs() if self.controller is not None else (0.0, 0.0)
 
         # Record
-        self.history.append(real_pose=self.real_pose, estimated_pose=self.estimated_pose, sensing_result=sensed_obstacles)
+        self.history.append(real_pose=self.real_pose, estimated_pose=self.estimated_pose, sensing_result=sensed_obstacles) if self.history is not None else None
 
         # Move
         self.real_pose = state_transition(self.real_pose, v, w, time_interval)
 
         # Localization
-        self.estimated_pose = self.localizer.estimate_pose(self.estimated_pose, v, w, time_interval)
+        self.estimated_pose = self.localizer.estimate_pose(self.estimated_pose, v, w, time_interval) if self.localizer is not None else self.estimated_pose
 
 
 class DwaRover(BasicRover):
@@ -332,13 +332,12 @@ class RoverAnimation():
         elems = []
         pbar = tqdm(total=end_step - start_step)
         self.ani = anm.FuncAnimation(
-            self.fig, self.animate_one_step, fargs=(ax, xlim, ylim, elems, start_step, map_name, pbar),
-            frames=end_step - start_step, interval=int(self.world.time_interval * 1000),
-            repeat=False
+            self.fig, self.animate_one_step, end_step - start_step, interval=int(self.world.time_interval * 1000), repeat=False,
+            fargs=(ax, xlim, ylim, elems, start_step, map_name, pbar),
         )
         plt.close()
 
-    def animate_one_step(self, i: int, ax: Axes, xlim: list, ylim: list, elems: list, start_step: int, map_name: str, pbar: tqdm):
+    def animate_one_step(self, i: int, ax: Axes, xlim: list, ylim: list, elems: list, start_step: int, map_name: str, pbar):
         while elems:
             elems.pop().remove()
 
