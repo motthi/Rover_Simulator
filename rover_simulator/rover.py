@@ -56,7 +56,7 @@ class BasicRover(Rover):
 
     def one_step(self, time_interval: float) -> None:
         if self.collision_detector.detect_collision(self):
-            self.history.append(real_pose=self.real_pose, estimated_pose=self.estimated_pose, sensing_result=[])
+            self.history.append(real_pose=self.real_pose, estimated_pose=self.estimated_pose, sensing_result=[]) if self.history is not None else None
             return
 
         # Sensing
@@ -370,9 +370,9 @@ class RoverAnimation():
             )
             elems.append(ax.add_patch(sensing_range)) if not elems is None else None
 
-            if self.rover.mapper.retain_range is not None and not elems is None:
-                map_range = patches.Circle(xy=(x, y), radius=self.rover.mapper.retain_range, ec='blue', fill=False)
-                elems.append(ax.add_patch(map_range))
+            # if self.rover.mapper.retain_range is not None and not elems is None:
+            #     map_range = patches.Circle(xy=(x, y), radius=self.rover.mapper.retain_range, ec='blue', fill=False)
+            #     elems.append(ax.add_patch(map_range))
 
         if not elems is None:
             alpha = 1.0

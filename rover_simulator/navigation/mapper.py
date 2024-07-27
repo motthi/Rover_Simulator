@@ -25,47 +25,48 @@ class GridMapper(Mapper):
         self.expand_rate = expand_rate
 
         self.map = np.full(self.grid_num, 0.5)
-
-        self.obstacles_table = []
-        self.obstacle_kdTree = None
         self.observed_grids = []
-        self.retain_range = float('inf')
 
         for obstacle in known_obstacles:
-            self.obstacles_table.append(obstacle)
             self.update_circle(obstacle.pos, (obstacle.r + rover_r) * expand_rate, 1.0)
 
-    def reset(self) -> None:
-        self.map = np.full(self.grid_num, 0.5)
-        self.obstacles_table = []
-        self.obstacle_kdTree = None
-        self.observed_grids = []
-
-    def update(self, rover_estimated_pose: np.ndarray, sensing_results) -> None:
-        # Initailize occupancy of grid in sensing range to 0
-        rover_idx = self.poseToIndex(rover_estimated_pose)
-        sensed_grids = []
-        ang_range_min = set_angle_into_range(rover_estimated_pose[2] - self.sensor.fov / 2)
-        ang_range_max = set_angle_into_range(rover_estimated_pose[2] + self.sensor.fov / 2)
+        self.sensing_grid_candidates = []
         sensing_range = self.sensor.range / self.grid_width
         for i in range(np.ceil(-sensing_range).astype(np.int32), np.floor(sensing_range).astype(np.int32) + 1):
             for j in range(np.ceil(-sensing_range).astype(np.int32), np.floor(sensing_range).astype(np.int32) + 1):
                 if np.sqrt(i**2 + j**2) > sensing_range + 1e-5:
                     continue
+                self.sensing_grid_candidates.append([i, j])
+
+    def reset(self) -> None:
+        self.map = np.full(self.grid_num, 0.5)
+        self.obstacles_table = []
+        self.observed_grids = []
+
+    def update(self, rover_estimated_pose: np.ndarray, sensing_results) -> None:
+        rover_idx = self.poseToIndex(rover_estimated_pose)
+        ang_range_min = set_angle_into_range(rover_estimated_pose[2] - self.sensor.fov / 2)
+        ang_range_max = set_angle_into_range(rover_estimated_pose[2] + self.sensor.fov / 2)
+
+        # Initailize occupancy of grid in sensing range to 0
+        sensed_grids = []
+        for [i, j] in self.sensing_grid_candidates:
+            if is_angle_in_range(np.arctan2(j, i), ang_range_min, ang_range_max):
                 u = rover_idx + np.array([i, j])
                 if self.isOutOfBounds(u):
                     continue
-                if is_angle_in_range(np.arctan2(j, i), ang_range_min, ang_range_max):
-                    sensed_grids.append(u)
-                    if self.map[u[0]][u[1]] <= 0.5:
-                        self.map[u[0]][u[1]] = 0.01
+                sensed_grids.append(u)
+                if self.map[u[0]][u[1]] <= 0.5:
+                    self.map[u[0]][u[1]] = 0.01
 
-        updated_grids = []
         if self.sensor.type == 'stereo_camera':
             for pt in sensing_results:
                 idx = self.poseToIndex(pt)
                 self.map[idx[0]][idx[1]] = 0.95
-                updated_grids.append([idx, 0.95])
+        elif self.sensor.type == 'lidar':
+            pass
+
+        # @todo expand obstacle
 
         # list up observed grids
         self.observed_grids = []
@@ -74,8 +75,6 @@ class GridMapper(Mapper):
                 self.observed_grids.append([u, 0.99])
             else:
                 self.observed_grids.append([u, 0.01])
-        for u, occ in updated_grids:
-            self.observed_grids.append([u, occ]) if not is_in_list(u, [v[0] for v in self.observed_grids]) else None
 
     def update_circle(self, pos, r, occupancy):
         updated_grids = []
