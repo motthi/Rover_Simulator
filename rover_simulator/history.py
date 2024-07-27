@@ -3,7 +3,7 @@ import copy
 import numpy as np
 import matplotlib.animation as anm
 import matplotlib.pyplot as plt
-from rover_simulator.core import Obstacle, History
+from rover_simulator.core import Obstacle, History, Sensor
 from rover_simulator.utils.draw import *
 
 if 'google.colab' in sys.modules:
@@ -25,8 +25,7 @@ class SimpleHistory(History):
         self,
         time_interval: float = 0.1,
         rover_r: float = 0.5,
-        sensor_range: float = 10.0,
-        sensor_fov: float = np.pi / 2,
+        sensor: Sensor = None,
         rover_color: str = 'black',
         waypoint_color: str = 'blue'
     ) -> None:
@@ -35,10 +34,9 @@ class SimpleHistory(History):
         self.estimated_poses = []
         self.sensing_results = []
         self.waypoints = []
-        self.sensor_range = sensor_range
-        self.sensor_fov = sensor_fov
         self.time_interval = time_interval
         self.rover_r = rover_r
+        self.sensor = sensor
         self.rover_color = rover_color
         self.waypoint_color = waypoint_color
 
@@ -59,8 +57,6 @@ class SimpleHistory(History):
             estimated_poses=np.array(self.estimated_poses),
             # sensing_results = np.array(self.sensing_results),
             waypoints=self.waypoints,
-            sensor_range=self.sensor_range,
-            sensor_fov=self.sensor_fov,
             time_interval=self.time_interval,
             rover_r=self.rover_r,
             rover_color=self.rover_color,
@@ -74,8 +70,6 @@ class SimpleHistory(History):
         self.estimated_poses = data['estimated_poses']
         # self.sensing_results = list(data['sensing_results'])
         self.waypoints = data['waypoints']
-        self.sensor_range = data['sensor_range'].item()
-        self.sensor_fov = data['sensor_fov'].item()
         self.time_interval = data['time_interval'].item()
         self.rover_r = data['rover_r'].item()
         self.rover_color = data['rover_color'].item()
@@ -94,7 +88,7 @@ class SimpleHistory(History):
         self.fig, ax = set_fig_params(figsize, xlim, ylim)
         draw_obstacles(ax, obstacles, enlarge_range)
 
-        draw_sensing_results(ax, self.real_poses, self.sensor_range, self.sensor_fov, self.sensing_results, draw_sensing_points_flag, draw_sensing_area_flag)
+        draw_sensing_results(ax, self.real_poses, self.sensor.range, self.sensor.fov, self.sensing_results, draw_sensing_points_flag, draw_sensing_area_flag)
         draw_rover(ax, self.real_poses[-1], self.rover_r, self.rover_color)  # Last rover position and angle
         draw_rover(ax, self.estimated_poses[-1], self.rover_r, self.rover_color)  # Last rover position and angle
 
@@ -114,8 +108,7 @@ class SimpleHistory(History):
         enlarge_range: float = 0.0,
         draw_waypoints_flag: bool = False,
         draw_sensing_results_flag: bool = False,
-        draw_sensing_points_flag: bool = True,
-        draw_sensing_area_flag: bool = True
+        draw_sensing_points_flag: bool = True
     ) -> None:
         end_step = len(self.steps) if end_step is None else end_step
         end_step = end_step if end_step > len(self.steps) else len(self.steps)
@@ -129,13 +122,13 @@ class SimpleHistory(History):
         # Start Animation
         pbar = tqdm(total=end_step - start_step)
         self.ani = anm.FuncAnimation(
-            self.fig, self.animate_one_step, fargs=(ax, xlim, ylim, elems, start_step, draw_waypoints_flag, draw_sensing_results_flag, draw_sensing_points_flag, draw_sensing_area_flag, pbar),
+            self.fig, self.animate_one_step, fargs=(ax, xlim, ylim, elems, start_step, draw_waypoints_flag, draw_sensing_results_flag, draw_sensing_points_flag, pbar),
             frames=end_step - start_step, interval=int(self.time_interval * 1000),
             repeat=False
         )
         plt.close()
 
-    def animate_one_step(self, i: int, ax: Axes, xlim: list, ylim: list, elems: list, start_step: int, draw_waypoints_flag: bool, draw_sensing_results_flag: bool, draw_sensing_points_flag: bool, draw_sensing_area_flag: bool, pbar: tqdm):
+    def animate_one_step(self, i: int, ax: Axes, xlim: list, ylim: list, elems: list, start_step: int, draw_waypoints_flag: bool, draw_sensing_results_flag: bool, draw_sensing_points_flag: bool, pbar: tqdm):
         while elems:
             elems.pop().remove()
 
@@ -150,11 +143,9 @@ class SimpleHistory(History):
         )
 
         real_pose = self.real_poses[start_step + i]
-        estimated_pose = self.estimated_poses[start_step + i]
         if draw_sensing_results_flag:
-            sensed_obstacles = self.sensing_results[start_step + i]
-            if not sensed_obstacles is None:
-                draw_history_sensing_results(ax, elems, real_pose, estimated_pose, sensed_obstacles, self.rover_r, self.sensor_range, self.sensor_fov, draw_sensing_points_flag, draw_sensing_area_flag)
+            ax.plot(real_pose[0], real_pose[1], marker="o", c="red", ms=5) if draw_sensing_points_flag is True else None
+            self.sensor.draw(ax, elems, self.sensing_results[start_step + i], real_pose)
         draw_history_waypoints(ax, elems, self.waypoints, start_step + i) if draw_waypoints_flag and len(self.waypoints) != 0 else None
         draw_history_pose(ax, elems, self.estimated_poses, self.rover_r, self.rover_color, i, start_step)
         draw_history_pose(ax, elems, self.real_poses, self.rover_r, self.rover_color, i, start_step)
@@ -162,8 +153,8 @@ class SimpleHistory(History):
 
 
 class HistoryWithKalmanFilter(SimpleHistory):
-    def __init__(self, time_interval: float = 0.1, rover_r: float = 0.5, sensor_range: float = 10, sensor_fov: float = np.pi / 2, rover_color: str = 'black', waypoint_color: str = 'blue') -> None:
-        super().__init__(time_interval, rover_r, sensor_range, sensor_fov, rover_color, waypoint_color)
+    def __init__(self, time_interval: float = 0.1, rover_r: float = 0.5, sensor: Sensor = None, rover_color: str = 'black', waypoint_color: str = 'blue') -> None:
+        super().__init__(time_interval, rover_r, sensor, rover_color, waypoint_color)
         self.estimated_covs = []
 
     def append(self, *args, **kwargs) -> None:
@@ -281,11 +272,9 @@ class HistoryWithKalmanFilter(SimpleHistory):
         )
 
         real_pose = self.real_poses[start_step + i]
-        estimated_pose = self.estimated_poses[start_step + i]
         if draw_sensing_results_flag:
-            sensed_obstacles = self.sensing_results[start_step + i]
-            if not sensed_obstacles is None:
-                draw_history_sensing_results(ax, elems, real_pose, estimated_pose, sensed_obstacles, self.rover_r, self.sensor_range, self.sensor_fov, draw_sensing_points_flag, draw_sensing_area_flag)
+            ax.plot(real_pose[0], real_pose[1], marker="o", c="red", ms=5) if draw_sensing_points_flag is True else None
+            self.sensor.draw(ax, elems, self.sensing_results[start_step + i], real_pose)
         draw_history_waypoints(ax, elems, self.waypoints, start_step + i) if draw_waypoints_flag and len(self.waypoints) != 0 else None
         draw_history_pose_with_error_ellipse(ax, elems, self.estimated_poses, self.estimated_covs, self.rover_r, self.rover_color, "blue", i, start_step) if draw_error_ellipse_flag else None
         draw_history_pose(ax, elems, self.real_poses, self.rover_r, self.rover_color, i, start_step)

@@ -8,7 +8,7 @@ from matplotlib.patches import Ellipse
 from matplotlib.figure import Figure
 from matplotlib.animation import FuncAnimation
 from matplotlib.axes import Axes
-from rover_simulator.core import Obstacle
+from rover_simulator.core import Obstacle, Sensor
 
 
 environment_cmap = LinearSegmentedColormap(
@@ -206,39 +206,6 @@ def draw_history_pose_with_error_ellipse(ax: Axes, elems: list, poses: list, cov
     xs = [x + math.cos(c - sigma3), x, x + math.cos(c + sigma3)]
     ys = [y + math.sin(c - sigma3), y, y + math.sin(c + sigma3)]
     elems += ax.plot(xs, ys, color=error_color, alpha=0.5)
-
-
-def draw_history_sensing_results(
-    ax: Axes, elems: list,
-    real_pose: np.ndarray, estimated_pose: np.ndarray,
-    sensed_obstacles: list, rover_r: float, sensor_range: float, sensor_fov: float,
-    draw_sensing_points_flag: bool, draw_sensing_area_flag: bool
-) -> None:
-    ax.plot(real_pose[0], real_pose[1], marker="o", c="red", ms=5) if draw_sensing_points_flag is True else None
-    if draw_sensing_area_flag:
-        sensing_range = patches.Wedge(
-            (real_pose[0], real_pose[1]), sensor_range,
-            theta1=np.rad2deg(real_pose[2] - sensor_fov / 2),
-            theta2=np.rad2deg(real_pose[2] + sensor_fov / 2),
-            alpha=0.5,
-            color="mistyrose"
-        )
-        elems.append(ax.add_patch(sensing_range))
-
-        # print(sensed_obstacles)
-        for sensed_obstacle in sensed_obstacles:
-            # print(sensed_obstacle)
-            distance = sensed_obstacle['distance']
-            angle = sensed_obstacle['angle'] + estimated_pose[2]
-            radius = sensed_obstacle['radius']
-
-            # ロボットと障害物を結ぶ線を描写
-            xn, yn = np.array(estimated_pose[0:2]) + np.array([distance * np.cos(angle), distance * np.sin(angle)])
-            elems += ax.plot([estimated_pose[0], xn], [estimated_pose[1], yn], color="mistyrose", linewidth=0.8)
-
-            # Draw Enlarged Obstacle Regions
-            enl_obs = patches.Circle(xy=(xn, yn), radius=radius + rover_r, fc='blue', ec='blue', alpha=0.3)
-            elems.append(ax.add_patch(enl_obs))
 
 
 def draw_history_waypoints(ax: Axes, elems: list, waypoints_list: list, step: int) -> None:

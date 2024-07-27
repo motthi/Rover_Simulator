@@ -86,7 +86,6 @@ class World():
                 elif f_line[1] == 'Rectangle':
                     self.append_obstacle(RectangularObstacle(np.array([float(f_line[2]), float(f_line[3])]), float(f_line[4]), float(f_line[5]), float(f_line[6])))
 
-
     def append_rover(self, rover: Rover):
         self.rovers.append(rover)
 
@@ -160,7 +159,7 @@ class World():
         enlarge_range: float = 0.0,
         draw_waypoints_flag: bool = False,
         draw_sensing_points_flag: bool = True,
-        draw_sensing_area_flag: bool = True
+        draw_sensing_results_flag: bool = True
     ) -> None:
         end_step = self.step if end_step is None else end_step
         self.fig, ax = set_fig_params(figsize, xlim, ylim)
@@ -172,7 +171,7 @@ class World():
         # Start Animation
         pbar = tqdm(total=end_step - start_step)
         self.ani = anm.FuncAnimation(
-            self.fig, self.animate_one_step, fargs=(ax, xlim, ylim, elems, start_step, draw_waypoints_flag, draw_sensing_points_flag, draw_sensing_area_flag, pbar),
+            self.fig, self.animate_one_step, fargs=(ax, xlim, ylim, elems, start_step, draw_waypoints_flag, draw_sensing_points_flag, draw_sensing_results_flag, pbar),
             frames=end_step - start_step, interval=int(self.time_interval * 1000),
             repeat=False
         )
@@ -181,7 +180,7 @@ class World():
     def animate_one_step(
             self,
             i: int, ax: Axes, xlim: list, ylim: list, elems: list, start_step: int,
-            draw_waypoints_flag: bool, draw_sensing_points_flag: bool, draw_sensing_area_flag: bool,
+            draw_waypoints_flag: bool, draw_sensing_points_flag: bool, draw_sensing_results_flag: bool,
             pbar: tqdm
     ):
         while elems:
@@ -199,15 +198,8 @@ class World():
         for rover in self.rovers:
             draw_history_pose(ax, elems, rover.history.estimated_poses, rover.r, rover.color, i, start_step)
             draw_history_pose(ax, elems, rover.history.real_poses, rover.r, rover.color, i, start_step)
-            draw_history_sensing_results(
-                ax, elems,
-                rover.history.real_poses[start_step + i],
-                rover.history.estimated_poses[start_step + i],
-                rover.history.sensing_results[start_step + i],
-                rover.r, rover.sensor.range, rover.sensor.fov,
-                draw_sensing_points_flag, draw_sensing_area_flag
-            ) if rover.sensor is not None else None
             draw_history_waypoints(ax, elems, rover.history.waypoints, rover.history.waypoints_colors, start_step + i) if draw_waypoints_flag and len(rover.history.waypoints) != 0 else None
+            rover.sensor.draw(ax, elems, rover.history.sensing_results[start_step + i], rover.history.real_poses[start_step + i]) if draw_sensing_results_flag else None
 
         pbar.update(1) if not pbar is None else None
 

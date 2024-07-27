@@ -41,7 +41,7 @@ class GridMapper(Mapper):
         self.obstacle_kdTree = None
         self.observed_grids = []
 
-    def update(self, rover_estimated_pose: np.ndarray, sensed_obstacles: list[dict]) -> None:
+    def update(self, rover_estimated_pose: np.ndarray, sensing_results) -> None:
         # Initailize occupancy of grid in sensing range to 0
         rover_idx = self.poseToIndex(rover_estimated_pose)
         sensed_grids = []
@@ -60,39 +60,12 @@ class GridMapper(Mapper):
                     if self.map[u[0]][u[1]] <= 0.5:
                         self.map[u[0]][u[1]] = 0.01
 
-        # list up new obstacles
-        new_obstacles = []
-        for sensed_obstacle in sensed_obstacles:
-            distance = sensed_obstacle['distance']
-            angle = sensed_obstacle['angle'] + rover_estimated_pose[2]
-            radius = sensed_obstacle['radius']
-            obstacle_pos = rover_estimated_pose[0:2] + np.array([distance * np.cos(angle), distance * np.sin(angle)])
-            new_obstacles.append([obstacle_pos, radius])
-
-        # list up deleted obstacles in sensing range
-        deleted_obstacles = []
-        if self.obstacle_kdTree is not None:
-            idxes = self.obstacle_kdTree.query_ball_point(rover_estimated_pose[0:2], r=self.sensor.range)
-            for idx in idxes:
-                obstacle_pos = self.obstacles_table[idx].pos
-                angle = set_angle_into_range(
-                    np.arctan2(
-                        obstacle_pos[1] - rover_estimated_pose[1],
-                        obstacle_pos[0] - rover_estimated_pose[0]
-                    ) - rover_estimated_pose[2]
-                )
-                if is_angle_in_range(angle, -self.sensor.fov / 2, self.sensor.fov / 2):
-                    deleted_obstacles.append(idx)   # センシング範囲内の過去の障害物を一旦削除する
-        # Delete obstacle list from obstacle_table
-        for idx in sorted(deleted_obstacles, reverse=True):
-            _ = self.update_circle(self.obstacles_table[idx].pos, (self.obstacles_table[idx].r + self.rover_r) * self.expand_rate, 0.01)
-            self.obstacles_table.pop(idx)
-
-        # list up all obstacles
         updated_grids = []
-        for pos, radius in new_obstacles:
-            updated_grids += self.update_circle(pos, (radius + self.rover_r) * self.expand_rate, 0.99)
-            self.obstacles_table.append(Obstacle(pos, radius))
+        if self.sensor.type == 'stereo_camera':
+            for pt in sensing_results:
+                idx = self.poseToIndex(pt)
+                self.map[idx[0]][idx[1]] = 0.95
+                updated_grids.append([idx, 0.95])
 
         # list up observed grids
         self.observed_grids = []
@@ -103,13 +76,6 @@ class GridMapper(Mapper):
                 self.observed_grids.append([u, 0.01])
         for u, occ in updated_grids:
             self.observed_grids.append([u, occ]) if not is_in_list(u, [v[0] for v in self.observed_grids]) else None
-
-        # Create obstacle's KD Tree
-        if not len(self.obstacles_table) == 0:
-            obstacle_positions = [obstacle.pos[0:2] for obstacle in self.obstacles_table]
-            self.obstacle_kdTree = cKDTree(obstacle_positions)
-        else:
-            self.obstacle_kdTree = None
 
     def update_circle(self, pos, r, occupancy):
         updated_grids = []
