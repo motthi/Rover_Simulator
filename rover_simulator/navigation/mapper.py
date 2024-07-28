@@ -5,6 +5,42 @@ from rover_simulator.utils.utils import is_angle_in_range, set_angle_into_range,
 from rover_simulator.utils.draw import draw_grid_map, set_fig_params, draw_obstacles, draw_start, draw_goal, draw_grid
 
 
+def bresenham(pt_s, pt_e):
+    x1, y1 = pt_s
+    x2, y2 = pt_e
+    dx = x2 - x1
+    dy = y2 - y1
+    is_steep = abs(dy) > abs(dx)
+    if is_steep:
+        x1, y1 = y1, x1
+        x2, y2 = y2, x2
+
+    swapped = False
+    if x1 > x2:
+        x1, x2 = x2, x1
+        y1, y2 = y2, y1
+        swapped = True
+
+    dx = x2 - x1
+    dy = y2 - y1
+    error = int(dx / 2.0)
+    y_step = 1 if y1 < y2 else -1
+
+    y_temp = y1
+    pts = []
+    for x in range(x1, x2 + 1):
+        coord = [y_temp, x] if is_steep else (x, y_temp)
+        pts.append(coord)
+        error -= abs(dy)
+        if error < 0:
+            y_temp += y_step
+            error += dx
+
+    if swapped:
+        pts.reverse()
+    return np.array(pts)
+
+
 class GridMapper(Mapper):
     def __init__(
         self,
@@ -45,36 +81,65 @@ class GridMapper(Mapper):
 
     def update(self, rover_estimated_pose: np.ndarray, sensing_results) -> None:
         rover_idx = self.poseToIndex(rover_estimated_pose)
-        ang_range_min = set_angle_into_range(rover_estimated_pose[2] - self.sensor.fov / 2)
-        ang_range_max = set_angle_into_range(rover_estimated_pose[2] + self.sensor.fov / 2)
-
-        # Initailize occupancy of grid in sensing range to 0
-        sensed_grids = []
-        for [i, j] in self.sensing_grid_candidates:
-            if is_angle_in_range(np.arctan2(j, i), ang_range_min, ang_range_max):
-                u = rover_idx + np.array([i, j])
-                if self.isOutOfBounds(u):
-                    continue
-                sensed_grids.append(u)
-                if self.map[u[0]][u[1]] <= 0.5:
-                    self.map[u[0]][u[1]] = 0.01
-
         if self.sensor.type == 'stereo_camera':
+            ang_range_min = set_angle_into_range(rover_estimated_pose[2] - self.sensor.fov / 2)
+            ang_range_max = set_angle_into_range(rover_estimated_pose[2] + self.sensor.fov / 2)
+
+            # Initailize occupancy of grid in sensing range to 0
+            sensed_grids = []
+            for [i, j] in self.sensing_grid_candidates:
+                if is_angle_in_range(np.arctan2(j, i), ang_range_min, ang_range_max):
+                    u = rover_idx + np.array([i, j])
+                    if self.isOutOfBounds(u):
+                        continue
+                    sensed_grids.append(u)
+                    if self.map[u[0]][u[1]] <= 0.5:
+                        self.map[u[0]][u[1]] = 0.01
+
             for pt in sensing_results:
-                idx = self.poseToIndex(pt)
+                idx = self.poseToIndex(pt + rover_estimated_pose[:2])
                 self.map[idx[0]][idx[1]] = 0.95
+
+            # list up observed grids
+            self.observed_grids = []
+            for u in sensed_grids:
+                if self.map[u[0]][u[1]] > 0.5:
+                    self.observed_grids.append([u, 0.99])
+                else:
+                    self.observed_grids.append([u, 0.01])
         elif self.sensor.type == 'lidar':
-            pass
+            for [r, th] in sensing_results:
+                if r > self.sensor.range:
+                    dist = self.sensor.range
+                else:
+                    dist = r
 
-        # @todo expand obstacle
+                ang = th + rover_estimated_pose[2]
+                pt = rover_estimated_pose[:2] + np.array([dist * np.cos(ang), dist * np.sin(ang)])
+                hit_idx = self.poseToIndex(pt)
+                beam = bresenham(rover_idx, hit_idx)
+                for u in beam:
+                    if self.isOutOfBounds(u):
+                        continue
+                    self.map[u[0]][u[1]] = 0.05
+                    self.observed_grids.append([u, 0.05])
 
-        # list up observed grids
-        self.observed_grids = []
-        for u in sensed_grids:
-            if self.map[u[0]][u[1]] > 0.5:
-                self.observed_grids.append([u, 0.99])
-            else:
-                self.observed_grids.append([u, 0.01])
+                if r <= self.sensor.range:
+                    if not self.isOutOfBounds(hit_idx):
+                        self.map[hit_idx[0]][hit_idx[1]] = 0.95
+                        self.observed_grids.append([hit_idx, 0.95])
+
+                    if not self.isOutOfBounds(hit_idx + np.array([1, 0])):
+                        self.map[hit_idx[0] + 1][hit_idx[1]] = 0.95
+                        self.observed_grids.append([hit_idx + np.array([1, 0]), 0.95])
+
+                    if not self.isOutOfBounds(hit_idx + np.array([0, 1])):
+                        self.map[hit_idx[0]][hit_idx[1] + 1] = 0.95
+                        self.observed_grids.append([hit_idx + np.array([0, 1]), 0.95])
+
+                    if not self.isOutOfBounds(hit_idx + np.array([1, 1])):
+                        self.map[hit_idx[0] + 1][hit_idx[1] + 1] = 0.95
+                        self.observed_grids.append([hit_idx + np.array([1, 1]), 0.95])
 
     def update_circle(self, pos, r, occupancy):
         updated_grids = []

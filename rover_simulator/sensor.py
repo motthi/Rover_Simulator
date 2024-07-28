@@ -23,8 +23,8 @@ def generate_points_in_circle(r: float, d: float = 0.1):
 
 def generate_points_in_rectangle(w: float, h: float, d: float = 0.1):
     points = []
-    xs = np.arange(0, w, d)
-    ys = np.arange(0, h, d)
+    xs = np.arange(0, w, d) + d / 2
+    ys = np.arange(0, h, d) + d / 2
     for x in xs:
         for y in ys:
             points.append((x, y))
@@ -140,11 +140,12 @@ class ImaginalStereoCamera(Sensor):
                     np.arctan2(pt[1] - rover.real_pose[1], pt[0] - rover.real_pose[0]) - rover.real_pose[2]
                 )
                 if is_angle_in_range(angle, - self.fov / 2, self.fov / 2) and distance < self.range:
-                    pts.append(pt)
+                    pts.append(pt - rover.real_pose[:2])
         return np.array(pts)
 
     def draw(self, ax: Axes, elems: list, result: np.ndarray, rover_pose: np.ndarray, c='blue'):
         if len(result) > 0:
+            result = result + rover_pose[:2]
             elems += ax.plot(result[:, 0], result[:, 1], 'o', color=c, markersize=1)
 
         sensing_range = patches.Wedge(
@@ -175,7 +176,6 @@ class ImaginalLiDAR(Sensor):
         for ang in smp_ang:
             xe = xr + self.range * np.cos(ang)
             ye = yr + self.range * np.sin(ang)
-            closest_pts = []
             min_dist = float('inf')
             for obstacle in self.obstacles:
                 if obstacle.type == 'circular':
@@ -186,14 +186,18 @@ class ImaginalLiDAR(Sensor):
                     dist = np.linalg.norm(np.array(poi) - np.array([xr, yr]))
                     if min_dist > dist:
                         min_dist = dist
-                        closest_pts = poi
-            if min_dist < self.range:
-                pts.append(closest_pts)
+            pts.append([min_dist, ang - rover.real_pose[2]])
         return np.array(pts)
 
     def draw(self, ax: Axes, elems: list, result: np.ndarray, rover_pose: np.ndarray, c='blue'):
-        if len(result) > 0:
-            elems += ax.plot(result[:, 0], result[:, 1], 'o', color=c, markersize=1)
+        pts = []
+        for pt in result:
+            x = rover_pose[0] + pt[0] * np.cos(pt[1] + rover_pose[2])
+            y = rover_pose[1] + pt[0] * np.sin(pt[1] + rover_pose[2])
+            pts.append([x, y])
+        if len(pts) > 0:
+            pts = np.array(pts)
+            elems += ax.plot(pts[:, 0], pts[:, 1], 'o', color=c, markersize=1)
 
         sensing_range = patches.Wedge(
             (rover_pose[0], rover_pose[1]), self.range,
