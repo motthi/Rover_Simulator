@@ -47,7 +47,7 @@ class GridMapper(Mapper):
         grid_size: np.ndarray = np.array([20, 20]),
         grid_width: float = 0.1,
         sensor: Sensor = None,
-        known_obstacles=[],
+        known_obstacles: list[Obstacle] = [],
         rover_r: float = 0.0,
         expand_rate: float = 1.0
     ) -> None:
@@ -64,15 +64,19 @@ class GridMapper(Mapper):
         self.observed_grids = []
 
         for obstacle in known_obstacles:
-            self.update_circle(obstacle.pos, (obstacle.r + rover_r) * expand_rate, 1.0)
+            if obstacle.type == 'circular':
+                self.update_circle(obstacle.pos, (obstacle.r + rover_r) * expand_rate, 1.0)
+            elif obstacle.type == 'rectangular':
+                self.update_rectangle(obstacle.xy, obstacle.w, obstacle.h, obstacle.angle, 1.0)
 
         self.sensing_grid_candidates = []
-        sensing_range = self.sensor.range / self.grid_width
-        for i in range(np.ceil(-sensing_range).astype(np.int32), np.floor(sensing_range).astype(np.int32) + 1):
-            for j in range(np.ceil(-sensing_range).astype(np.int32), np.floor(sensing_range).astype(np.int32) + 1):
-                if np.sqrt(i**2 + j**2) > sensing_range + 1e-5:
-                    continue
-                self.sensing_grid_candidates.append([i, j])
+        if sensor:
+            sensing_range = self.sensor.range / self.grid_width
+            for i in range(np.ceil(-sensing_range).astype(np.int32), np.floor(sensing_range).astype(np.int32) + 1):
+                for j in range(np.ceil(-sensing_range).astype(np.int32), np.floor(sensing_range).astype(np.int32) + 1):
+                    if np.sqrt(i**2 + j**2) > sensing_range + 1e-5:
+                        continue
+                    self.sensing_grid_candidates.append([i, j])
 
     def reset(self) -> None:
         self.map = np.full(self.grid_num, 0.5)
@@ -151,6 +155,24 @@ class GridMapper(Mapper):
                 if np.linalg.norm(np.array([lattice_x, lattice_y])) > r:
                     continue
                 lattice_pos = np.array([lattice_x, lattice_y]) + pos
+                u = self.poseToIndex(lattice_pos)
+                if self.isOutOfBounds(u):
+                    continue
+                if not is_in_list(u, [grids[0] for grids in updated_grids]):
+                    self.map[u[0]][u[1]] = occupancy
+                    updated_grids.append([u, occupancy])
+        return updated_grids
+
+    def update_rectangle(self, xy, width, height, angle, occupancy):
+        angle = np.deg2rad(angle)
+        updated_grids = []
+        range_x = np.arange(-self.rover_r, self.rover_r + width + 1e-5, self.grid_width * 0.5)
+        range_y = np.arange(-self.rover_r, self.rover_r + height + 1e-5, self.grid_width * 0.5)
+        for lattice_x in range_x:
+            for lattice_y in range_y:
+                lattice_pos = np.array([lattice_x, lattice_y])
+                rot_mat = np.array([[np.cos(angle), -np.sin(angle)], [np.sin(angle), np.cos(angle)]])
+                lattice_pos = np.dot(rot_mat, lattice_pos) + xy
                 u = self.poseToIndex(lattice_pos)
                 if self.isOutOfBounds(u):
                     continue
