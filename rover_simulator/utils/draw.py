@@ -185,7 +185,7 @@ def draw_sensing_results(ax: Axes, poses, sensor_range, sensor_fov, sensing_resu
                 ax.add_patch(sensing_range)
 
 
-def draw_history_pose(ax: Axes, elems: list, poses: list, rover_r: float, rover_color: str, step: int, start_step: int) -> None:
+def draw_history_pose(ax: Axes, elems: list, poses: list, rover_r: float, rover_color: str, step: int, start_step: int = 0) -> None:
     xn, yn = poses[step][0:2] + rover_r * np.array([np.cos(poses[step][2]), np.sin(poses[step][2])])
     elems += ax.plot([poses[step][0], xn], [poses[step][1], yn], color=rover_color)
     elems += ax.plot(

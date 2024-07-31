@@ -61,9 +61,13 @@ class Localizer():
 
 class Controller():
     def __init__(self) -> None:
-        pass
+        self.fig = None
+        self.ani = None
 
     def calculate_control_inputs(self) -> tuple[float, float]:
+        raise NotImplementedError()
+    
+    def animiate(self) -> None:
         raise NotImplementedError()
 
 

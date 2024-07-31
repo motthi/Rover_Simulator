@@ -115,24 +115,18 @@ class DwaRover(BasicRover):
             return
 
         # Sensing
-        sensed_list = self.sensor.sense(self) if self.sensor is not None else []
-        sensed_obstacles = []
-        for sensed_obj in sensed_list:
-            distance = sensed_obj['distance']
-            angle = sensed_obj['angle'] + self.estimated_pose[2]
-            obs_pos = self.real_pose[0:2] + distance * np.array([np.cos(angle), np.sin(angle)])
-            sensed_obstacles.append(Obstacle(obs_pos, sensed_obj['radius']))
+        sensing_result = self.sensor.sense(self) if self.sensor is not None else []
 
         # Calculate Control Inputs
         v, w = self.controller.calculate_control_inputs(
             rover_pose=self.estimated_pose, dt=time_interval,
-            goal_pose=self.waypoint, obstacles=sensed_obstacles,
+            goal_pose=self.waypoint, sensing_result=sensing_result,
             v=self.v, w=self.w,
         )
         self.v, self.w = v, w
 
         # Record
-        self.history.append(real_pose=self.real_pose, estimated_pose=self.estimated_pose, sensing_result=sensed_list, waypoints=self.waypoints)
+        self.history.append(real_pose=self.real_pose, estimated_pose=self.estimated_pose, sensing_result=sensing_result, waypoints=self.waypoints) if self.history is not None else None
 
         # Move
         self.real_pose = state_transition(self.real_pose, v, w, time_interval)
@@ -165,12 +159,10 @@ class KalmanRover(BasicRover):
             return
 
         # Sensing
-        sensed_obstacles = None
-        if self.sensing_planner.decide(rover_pose=self.estimated_pose):
-            sensed_obstacles = self.sensor.sense(self) if self.sensor is not None else []
+        sensing_result = self.sensor.sense(self) if self.sensor is not None else []
 
         # Mapping
-        self.mapper.update(self.estimated_pose, sensed_obstacles) if self.mapper is not None else None
+        self.mapper.update(self.estimated_pose, sensing_result) if self.mapper is not None else None
 
         # Calculate Control Inputs
         v, w = self.controller.calculate_control_inputs()
@@ -180,7 +172,7 @@ class KalmanRover(BasicRover):
             real_pose=self.real_pose,
             estimated_pose=self.estimated_pose,
             estimated_pose_cov=self.localizer.belief.cov,
-            sensing_result=sensed_obstacles
+            sensing_result=sensing_result
         )
 
         # Move

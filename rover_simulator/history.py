@@ -144,7 +144,7 @@ class SimpleHistory(History):
 
         real_pose = self.real_poses[start_step + i]
         if draw_sensing_results_flag:
-            ax.plot(real_pose[0], real_pose[1], marker="o", c="red", ms=5) if draw_sensing_points_flag is True else None
+            ax.plot(real_pose[0], real_pose[1], marker="o", c="red", ms=5)
             self.sensor.draw(ax, elems, self.sensing_results[start_step + i], real_pose)
         draw_history_waypoints(ax, elems, self.waypoints, start_step + i) if draw_waypoints_flag and len(self.waypoints) != 0 else None
         draw_history_pose(ax, elems, self.estimated_poses, self.rover_r, self.rover_color, i, start_step)
