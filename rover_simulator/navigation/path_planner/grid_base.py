@@ -15,6 +15,8 @@ neigbor_grids = np.array([[1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1], [0
 
 
 class GridBasePathPlanning(PathPlanner):
+    grid_width: float
+    
     def __init__(self) -> None:
         pass
 

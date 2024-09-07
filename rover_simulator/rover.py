@@ -14,7 +14,9 @@ from rover_simulator.world import World
 from rover_simulator.history import History, HistoryWithKalmanFilter
 from rover_simulator.collision_detector import IgnoreCollision
 from rover_simulator.navigation.localizer import KalmanFilter
+from rover_simulator.navigation.mapper import GridMapper
 from rover_simulator.navigation.path_planner import PathPlanner
+from rover_simulator.navigation.path_planner.grid_base import GridBasePathPlanning
 from rover_simulator.navigation.controller import DwaController
 from rover_simulator.navigation.sensing_planner import SimpleSensingPlanner
 
@@ -219,13 +221,16 @@ class FollowRover(DwaRover):
 
 
 class OnlinePathPlanningRover(DwaRover):
+    mapper: GridMapper
+    path_planner: GridBasePathPlanning
+
     def __init__(
         self,
         pose: np.ndarray, radius: float,
-        sensor: Sensor = None, localizer: Localizer = None, path_planner: PathPlanner = None,
+        sensor: Sensor = None, localizer: Localizer = None, path_planner: GridBasePathPlanning = None,
         controller: Controller = DwaController(),
         sensing_planner: SensingPlanner = SimpleSensingPlanner(),
-        mapper: Mapper = None, collision_detector: CollisionDetector = None,
+        mapper: GridMapper = None, collision_detector: CollisionDetector = None,
         history: History = None,
         color: str = "black", waypoint_color: str = 'blue',
         goal_pos: np.ndarray = np.array([18, 18]),
