@@ -332,7 +332,7 @@ class DstarLite(GridBasePathPlanning):
     def __init__(
         self,
         start_pos: np.ndarray = None, goal_pos: np.ndarray = None,
-        mapper: np.ndarray = None, map_grid_width: float = 1.0,
+        mapper: GridMapper = None, map_grid_width: float = 1.0,
         heuristics: float = 0.5,
     ):
         self.grid_width = map_grid_width
@@ -341,10 +341,10 @@ class DstarLite(GridBasePathPlanning):
         self.goal_idx = self.pose2index(goal_pos) if goal_pos is not None else None
         self.heuristics = heuristics
 
-        if mapper is not None:
+        if mapper:
             self.local_grid_map = np.full(mapper.map.shape, 0.5, dtype=float)  # Local Map is Obstacle Occupancy Grid Map
             self.metric_grid_map = np.full(self.grid_cost_num, -1.0, dtype=np.float)  # Metric Map shows wheter the grid is observed, -1: Unobserved, 0: Free, 1: Obstacles
-            self.is_in_U_map = np.full(mapper.mapshape, 0, dtype=np.int16)
+            self.is_in_U_map = np.full(mapper.map.shape, 0, dtype=np.int16)
 
         self.U = []
         self.km = 0.0
@@ -352,10 +352,10 @@ class DstarLite(GridBasePathPlanning):
         self.pathToTake = []
         self.takenPath = []
 
-        self.newObstacles = []
+        self.new_obstacles = []
         self.name = "DstarLite"
 
-    def set_map(self, mapper: Mapper):
+    def set_map(self, mapper: GridMapper):
         self.grid_width = mapper.grid_width
         self.grid_num = np.array(mapper.map.shape)
         self.grid_map = copy.copy(mapper.map)
@@ -404,7 +404,7 @@ class DstarLite(GridBasePathPlanning):
 
         self.pathToTake = []
         self.takenPath = []
-        self.newObstacles = []
+        self.new_obstacles = []
 
         self.previous_idx = np.array(self.start_idx)
         self.current_idx = self.start_idx
@@ -418,11 +418,11 @@ class DstarLite(GridBasePathPlanning):
         waypoints = self.get_path(self.current_idx)
         return waypoints
 
-    def update_path(self, pose: np.ndarray, mapper: Mapper):
+    def update_path(self, pose: np.ndarray, mapper: GridMapper):
         self.current_idx = self.pose2index(pose)
 
-        self.newObstacles = []
-        self.newFrees = []
+        self.new_obstacles = []
+        self.new_frees = []
 
         for u, c in mapper.observed_grids:
             if self.is_ob(u):
@@ -430,16 +430,17 @@ class DstarLite(GridBasePathPlanning):
             prev_occ = self.local_grid_map[u[0]][u[1]]
             self.local_grid_map[u[0]][u[1]] = mapper.map[u[0]][u[1]]
             if self.local_grid_map[u[0]][u[1]] > 0.5 and prev_occ <= 0.5:
-                self.newObstacles.append(u)
+                self.new_obstacles.append(u)
             elif self.local_grid_map[u[0]][u[1]] <= 0.5 and prev_occ > 0.5:
-                self.newFrees.append(u)
+                self.new_frees.append(u)
         # self.local_grid_map[self.current_idx[0]][self.current_idx[1]] = 0.01
 
         # Listup edge around obstacles
         update_to_obstacle_list = []
         update_to_free_list = []
+
         # Free -> Obstacle
-        for u in self.newObstacles:
+        for u in self.new_obstacles:
             if self.is_ob(u):
                 continue
             for v in self.get_neigbors(u):
@@ -454,8 +455,9 @@ class DstarLite(GridBasePathPlanning):
                 if not self.__c(w, x) == float('inf'):
                     update_to_obstacle_list.append([w, x])
                     update_to_obstacle_list.append([x, w])
+
         # Obstacle -> Free
-        for u in self.newFrees:
+        for u in self.new_frees:
             if self.is_ob(u):
                 continue
             for v in self.get_neigbors(u):

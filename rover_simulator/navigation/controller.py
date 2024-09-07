@@ -8,6 +8,7 @@ from rover_simulator.core import Controller, Obstacle
 from rover_simulator.utils.utils import set_angle_into_range
 from rover_simulator.utils.motion import state_transition
 from rover_simulator.utils.draw import set_fig_params, draw_history_pose, draw_obstacles, draw_start, draw_goal
+from rover_simulator.navigation.mapper import GridMapper
 
 
 if 'google.colab' in sys.modules:
@@ -59,7 +60,7 @@ class DwaController(Controller):
         predict_time: float = 1.0,
         rover_r: float = 0.0,
         rover_stuck_flag_cons: float = 0.001,
-        sensor_type: str = None # @todo Make it easier to understand
+        sensor_type: str = None  # @todo Make it easier to understand
     ) -> None:
         self.nu_min = nu_range[0]
         self.nu_max = nu_range[1]
@@ -88,7 +89,7 @@ class DwaController(Controller):
         rover_pose: np.ndarray,
         v: float, w: float, dt: float,
         goal_pose: np.ndarray,
-        sensing_result: np.ndarray # @todo Only for the sensor? No compatibility with map?
+        sensing_result: np.ndarray  # @todo Only for the sensor? No compatibility with map?
     ):
         if len(sensing_result) != 0:
             if self.sensor_type == 'stereo_camera':
@@ -150,7 +151,7 @@ class DwaController(Controller):
                 distance = np.linalg.norm(x[0:2] - sensing_result, axis=1)
                 if np.any(distance < self.rover_r):
                     return []
-                
+
             trajectory = np.vstack((trajectory, x))
             time += dt
         return trajectory
@@ -229,7 +230,7 @@ class DwaController(Controller):
         )
 
         draw_history_pose(ax, elems, rover_poses, self.rover_r, "black", i)
-        
+
         if i < len(self.best_path_log):
             self.draw_path_primitives(ax, elems, self.path_primitive_log[i])
             self.draw_best_path(ax, elems, self.best_path_log[i])
@@ -244,7 +245,7 @@ class DwaController(Controller):
                 continue
             elems += ax.plot(trajectory[:, 0], trajectory[:, 1], color="cyan", alpha=0.5)
 
-    def draw_best_path(self, ax:Axes ,elems: list, best_trajectory: list[np.ndarray]) -> None:
+    def draw_best_path(self, ax: Axes, elems: list, best_trajectory: list[np.ndarray]) -> None:
         if len(best_trajectory) == 0:
             return
         elems += ax.plot(best_trajectory[:, 0], best_trajectory[:, 1], color="red")
@@ -332,17 +333,11 @@ class ArcPathController(Controller):
         rover_pose: np.ndarray,
         dt: float,
         goal_pose: np.ndarray,
-        obstacles: list[Obstacle],
+        mapper: GridMapper,
         *args, **kwargs
     ):
         min_cost = float("inf")
         best_u = [0.0, 0.0]
-
-        self.obstacles = obstacles
-        if len(self.obstacles) == 0:
-            obstacles_kdTree = None
-        else:
-            obstacles_kdTree = cKDTree([obstacle.pos[0:2] for obstacle in obstacles])
 
         # List up Trajectroy
         traj_list = []
@@ -359,17 +354,12 @@ class ArcPathController(Controller):
                     x = np.append(pose, [v, w])
 
                     # Collision Check
-                    if obstacles_kdTree is not None:
-                        idxes = obstacles_kdTree.query_ball_point(x[0:2], 3.0)
-                        for idx in idxes:
-                            obs_pos = self.obstacles[idx].pos
-                            obs_r = self.obstacles[idx].r
-                            dist = np.linalg.norm(obs_pos - x[0:2])
-                            if dist < obs_r + self.rover_r:
-                                is_collision = True
-                                break
+                    idx = mapper.poseToIndex(pose)
+                    if mapper.map[idx[0], idx[1]] > 0.5:
+                        is_collision = True
+
                     traj = np.vstack((traj, x))
-                    if is_collision is True:
+                    if is_collision:
                         break
                 traj_list.append(traj) if is_collision is False else None
 

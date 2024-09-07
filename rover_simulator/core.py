@@ -66,7 +66,7 @@ class Controller():
 
     def calculate_control_inputs(self) -> tuple[float, float]:
         raise NotImplementedError()
-    
+
     def animiate(self) -> None:
         raise NotImplementedError()
 

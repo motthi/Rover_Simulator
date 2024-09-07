@@ -244,16 +244,16 @@ class OnlinePathPlanningRover(DwaRover):
         self.waypoint_dist = waypoint_dist
 
     def one_step(self, time_interval: float) -> None:
-        sensed_obstacles = []
+        sensing_result = []
 
         # Collision Detection
         if self.collision_detector.detect_collision(self):
-            self.history.append(real_pose=self.real_pose, estimated_pose=self.estimated_pose, sensing_result=sensed_obstacles, waypoints=self.waypoints)
+            self.history.append(real_pose=self.real_pose, estimated_pose=self.estimated_pose, sensing_result=sensing_result, waypoints=self.waypoints)
             return
 
         # Goal Check
         if np.linalg.norm(self.goal_pos[0:2] - self.estimated_pose[0:2]) < 1.0:
-            self.history.append(real_pose=self.real_pose, estimated_pose=self.estimated_pose, sensing_result=sensed_obstacles, waypoints=self.waypoints)
+            self.history.append(real_pose=self.real_pose, estimated_pose=self.estimated_pose, sensing_result=sensing_result, waypoints=self.waypoints)
             return
 
         # Sensing Planning
@@ -261,8 +261,8 @@ class OnlinePathPlanningRover(DwaRover):
 
         # Sensing
         if sense_plan_flag:
-            sensed_obstacles = self.sensor.sense(self) if self.sensor is not None else []
-            self.mapper.update(self.estimated_pose, sensed_obstacles) if self.mapper is not None else None
+            sensing_result = self.sensor.sense(self) if self.sensor else []
+            self.mapper.update(self.estimated_pose, sensing_result) if self.mapper else None
             if not self.mapper.isOutOfBounds(self.mapper.poseToIndex(self.estimated_pose)):
                 self.waypoints = self.path_planner.update_path(self.estimated_pose, self.mapper)
 
@@ -274,12 +274,13 @@ class OnlinePathPlanningRover(DwaRover):
 
         # Calculate Control Inputs
         v, w = self.controller.calculate_control_inputs(
-            rover_pose=self.estimated_pose, v=self.v, w=self.w, dt=time_interval,
-            goal_pose=self.waypoint, obstacles=self.mapper.obstacles_table
+            rover_pose=self.estimated_pose, dt=time_interval,
+            goal_pose=self.waypoint, mapper=self.mapper,
+            v=self.v, w=self.w,
         )
 
         # Record
-        self.history.append(real_pose=self.real_pose, estimated_pose=self.estimated_pose, sensing_result=sensed_obstacles, waypoints=self.waypoints)
+        self.history.append(real_pose=self.real_pose, estimated_pose=self.estimated_pose, sensing_result=sensing_result, waypoints=self.waypoints)
 
         # Move one step
         self.real_pose = state_transition(self.real_pose, v, w, time_interval)
@@ -293,6 +294,7 @@ class RoverAnimation():
         self.world = world
         self.rover = rover
         self.path_planner = path_planner
+        self.waypoints = []
 
     def animate(
         self,
@@ -307,14 +309,10 @@ class RoverAnimation():
 
         if map_name == 'cost':
             for obstacle in self.world.obstacles:
-                enl_obs = patches.Circle(xy=(obstacle.pos[0], obstacle.pos[1]), radius=obstacle.r + enlarge_range, fc='gray', ec='gray')
-                ax.add_patch(enl_obs)
-            for obstacle in self.world.obstacles:
-                obs = patches.Circle(xy=(obstacle.pos[0], obstacle.pos[1]), radius=obstacle.r, fc='black', ec='black')
-                ax.add_patch(obs)
+                obstacle.draw(ax, enlarge_range)
 
         self.rover.mapper.reset()
-        if not self.path_planner is None:
+        if self.path_planner:
             self.rover.path_planner = copy.copy(self.path_planner)
             self.rover.path_planner.set_map(self.rover.mapper)
             self.rover.waypoints = self.rover.path_planner.calculate_path()
@@ -362,9 +360,11 @@ class RoverAnimation():
             )
             elems.append(ax.add_patch(sensing_range)) if not elems is None else None
 
-            # if self.rover.mapper.retain_range is not None and not elems is None:
-            #     map_range = patches.Circle(xy=(x, y), radius=self.rover.mapper.retain_range, ec='blue', fill=False)
-            #     elems.append(ax.add_patch(map_range))
+        elems += ax.plot(self.waypoints[:, 0], self.waypoints[:, 1], linewidth=1.0, linestyle="-", color='blue')
+
+        # if self.rover.mapper.retain_range is not None and not elems is None:
+        #     map_range = patches.Circle(xy=(x, y), radius=self.rover.mapper.retain_range, ec='blue', fill=False)
+        #     elems.append(ax.add_patch(map_range))
 
         if not elems is None:
             alpha = 1.0

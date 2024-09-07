@@ -17,6 +17,7 @@ else:
 
 class World():
     rovers: list[Rover]
+    obstacles: list[Obstacle]
 
     def __init__(self, time_interval: float = 0.1) -> None:
         self.rovers = []

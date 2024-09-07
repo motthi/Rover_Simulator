@@ -70,6 +70,7 @@ class GridMapper(Mapper):
                 self.update_rectangle(obstacle.xy, obstacle.w, obstacle.h, obstacle.angle, 1.0)
 
         self.sensing_grid_candidates = []
+        self.enlarged_sensing_grid_candidates = []
         if sensor:
             sensing_range = self.sensor.range / self.grid_width
             for i in range(np.ceil(-sensing_range).astype(np.int32), np.floor(sensing_range).astype(np.int32) + 1):
@@ -77,6 +78,13 @@ class GridMapper(Mapper):
                     if np.sqrt(i**2 + j**2) > sensing_range + 1e-5:
                         continue
                     self.sensing_grid_candidates.append([i, j])
+
+            sensing_range = (self.sensor.range + rover_r) / self.grid_width
+            for i in range(np.ceil(-sensing_range).astype(np.int32), np.floor(sensing_range).astype(np.int32) + 1):
+                for j in range(np.ceil(-sensing_range).astype(np.int32), np.floor(sensing_range).astype(np.int32) + 1):
+                    if np.sqrt(i**2 + j**2) > sensing_range + 1e-5:
+                        continue
+                    self.enlarged_sensing_grid_candidates.append([i, j])
 
     def reset(self) -> None:
         self.map = np.full(self.grid_num, 0.5)
@@ -86,37 +94,48 @@ class GridMapper(Mapper):
     def update(self, rover_estimated_pose: np.ndarray, sensing_results) -> None:
         rover_idx = self.poseToIndex(rover_estimated_pose)
         if self.sensor.type == 'stereo_camera':
+            map_temp = np.copy(self.map)
+
             ang_range_min = set_angle_into_range(rover_estimated_pose[2] - self.sensor.fov / 2)
             ang_range_max = set_angle_into_range(rover_estimated_pose[2] + self.sensor.fov / 2)
 
             # Initailize occupancy of grid in sensing range to 0
-            sensed_grids = []
             for [i, j] in self.sensing_grid_candidates:
                 if is_angle_in_range(np.arctan2(j, i), ang_range_min, ang_range_max):
                     u = rover_idx + np.array([i, j])
                     if self.isOutOfBounds(u):
                         continue
-                    sensed_grids.append(u)
+                    # sensed_grids.append(u)
                     if self.map[u[0]][u[1]] <= 0.5:
                         self.map[u[0]][u[1]] = 0.01
 
             for pt in sensing_results:
-                idx = self.poseToIndex(pt + rover_estimated_pose[:2])
-                self.map[idx[0]][idx[1]] = 0.95
+                # idx = self.poseToIndex(pt + rover_estimated_pose[:2])
+                self.update_circle(pt + rover_estimated_pose[:2], self.rover_r, 0.95)
+                # self.map[idx[0]][idx[1]] = 0.95
 
             # list up observed grids
             self.observed_grids = []
-            for u in sensed_grids:
-                if self.map[u[0]][u[1]] > 0.5:
-                    self.observed_grids.append([u, 0.99])
-                else:
-                    self.observed_grids.append([u, 0.01])
+            for [i, j] in self.enlarged_sensing_grid_candidates:
+                # if is_angle_in_range(np.arctan2(j, i), ang_range_min, ang_range_max):
+                u = rover_idx + np.array([i, j])
+                if self.isOutOfBounds(u):
+                    continue
+                if map_temp[u[0]][u[1]] != self.map[u[0]][u[1]]:
+                    self.observed_grids.append([u, self.map[u[0]][u[1]]])
+
+            # for u in sensed_grids:
+            #     if self.map[u[0]][u[1]] > 0.5:
+            #         self.observed_grids.append([u, 0.99])
+            #     else:
+            #         self.observed_grids.append([u, 0.01])
         elif self.sensor.type == 'lidar':
             for [r, th] in sensing_results:
                 if r > self.sensor.range:
                     dist = self.sensor.range
                 else:
                     dist = r
+                dist -= self.rover_r
 
                 ang = th + rover_estimated_pose[2]
                 pt = rover_estimated_pose[:2] + np.array([dist * np.cos(ang), dist * np.sin(ang)])
