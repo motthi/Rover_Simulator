@@ -767,7 +767,7 @@ class FieldDstar(GridBasePathPlanning):
         self.rhs_map = np.full(mapper.map.shape, float('inf'))
         self.bptr_map = np.full(np.append(np.array(mapper.map.shape), 2), np.array([0, 0]))
         self.visted_map = np.full(mapper.map.shape, 0.0, dtype=int)
-        self.metric_grid_map = np.full(mapper.map.shape, -1.0, dtype=np.float)  # Metric Map shows wheter the grid is observed, -1: Unobserved, 0: Free, 1: Obstacles
+        self.metric_grid_map = np.full(mapper.map.shape, -1.0, dtype=float)  # Metric Map shows wheter the grid is observed, -1: Unobserved, 0: Free, 1: Obstacles
 
         self.g_map[self.start_idx[0]][self.start_idx[1]] = float('inf')
         self.rhs_map[self.start_idx[0]][self.start_idx[1]] = float('inf')
@@ -787,12 +787,58 @@ class FieldDstar(GridBasePathPlanning):
         self.newObstacles = []
         self.name = "FieldDstar"
 
+    def set_map(self, mapper: GridMapper):
+        self.grid_width = mapper.grid_width
+        self.grid_num = np.array(mapper.map.shape)
+        self.grid_map = copy.copy(mapper.map)
+
+        if self.is_ob(self.start_idx):
+            raise ValueError("Start position is out of bounds")
+        if self.is_ob(self.goal_idx):
+            raise ValueError("Goal position is out of bounds")
+
+        self.local_grid_map = copy.copy(mapper.map)  # センシングによって構築したマップ
+        self.metric_grid_map = np.full(self.grid_num, -1.0, dtype=float)  # 経路計画で使用するマップ
+        self.g_map = np.full(self.local_grid_map.shape, float('inf'))
+        self.rhs_map = np.full(self.local_grid_map.shape, float('inf'))
+        self.is_in_U_map = np.full(self.local_grid_map.shape, 0, dtype=np.int16)
+
+        self.local_grid_map[self.start_idx[0]][self.start_idx[1]] = 0.0
+        self.rhs_map[self.goal_idx[0]][self.goal_idx[1]] = 0
+
+        self.previous_idx = np.array(self.start_idx)
+
+        for idx, occ in np.ndenumerate(self.local_grid_map):
+            if occ > 0.5:
+                self.metric_grid_map[idx[0]][idx[1]] = 1.0
+        self.metric_grid_map[self.start_idx[0]][self.start_idx[1]] = 0
+
     def calculate_path(self):
         self.compute_shortest_path()
         waypoints = self.get_path(self.current_idx)
         return waypoints
 
     def get_path(self, idx):
+        self.pathToTake = [idx]
+
+        while not np.all(idx == self.goal_idx):
+            next_idx = idx
+            min_cost = float('inf')
+            for s_ in self.get_neigbors(idx):
+                if self.g(s_) < min_cost:
+                    min_cost = self.g(s_)
+                    next_idx = s_
+            if np.all(next_idx == idx):
+                break
+            idx = next_idx
+            self.pathToTake.append(idx)
+
+        # Goal positionを追加
+        self.pathToTake.append(self.goal_idx)
+
+        # 経路を座標リストに変換
+        waypoints = np.array([list(self.index2pose(grid)[0:2]) for grid in self.pathToTake])
+        return waypoints
         # I do not know how to extract path
         self.pathToTake = [idx]
 
@@ -832,9 +878,11 @@ class FieldDstar(GridBasePathPlanning):
         while not self.k_compare(self.min_val_of_opened(), self.key(self.start_idx)) or self.rhs(self.start_idx) != self.g(self.start_idx):
             s = self.min_idx_of_opened()
             if s is None:
-                print("Cannot find the path")
+                print("Path not found")
                 break
+
             self.visted_map[s[0]][s[1]] = 1
+
             if self.g(s) > self.rhs(s):
                 self.g_map[s[0]][s[1]] = self.rhs(s)
                 self.unset_open(s)
@@ -842,7 +890,6 @@ class FieldDstar(GridBasePathPlanning):
                     if not self.has_visited(s_):
                         self.g_map[s_[0]][s_[1]] = float('inf')
                         self.rhs_map[s_[0]][s_[1]] = float('inf')
-                        # self.visted_map[s_[0]][s_[1]] = 1
                     rhs_old = self.rhs(s_)
                     if self.rhs(s_) > self.compute_cost(s_, s, self.ccknbr(s_, s)):
                         self.rhs_map[s_[0]][s_[1]] = self.compute_cost(s_, s, self.ccknbr(s_, s))
@@ -867,8 +914,48 @@ class FieldDstar(GridBasePathPlanning):
                                     self.rhs_map[s_[0]][s_[1]] = self.min_cost_in_neigbor(s_)
                                     self.bptr_map[s_[0]][s_[1]] = self.min_idx_in_neigbor(s_)
                                     self.update_state(s_)
-                        self.visted_map[s_[0]][s_[1]] = 1
+                        self.visted_map[s[0]][s[1]] = 1
                 self.update_state(s)
+        # while not self.k_compare(self.min_val_of_opened(), self.key(self.start_idx)) or self.rhs(self.start_idx) != self.g(self.start_idx):
+        #     s = self.min_idx_of_opened()
+        #     if s is None:
+        #         print("Cannot find the path")
+        #         break
+        #     self.visted_map[s[0]][s[1]] = 1
+        #     if self.g(s) > self.rhs(s):
+        #         self.g_map[s[0]][s[1]] = self.rhs(s)
+        #         self.unset_open(s)
+        #         for s_ in self.get_neigbors(s):
+        #             if not self.has_visited(s_):
+        #                 self.g_map[s_[0]][s_[1]] = float('inf')
+        #                 self.rhs_map[s_[0]][s_[1]] = float('inf')
+        #                 # self.visted_map[s_[0]][s_[1]] = 1
+        #             rhs_old = self.rhs(s_)
+        #             if self.rhs(s_) > self.compute_cost(s_, s, self.ccknbr(s_, s)):
+        #                 self.rhs_map[s_[0]][s_[1]] = self.compute_cost(s_, s, self.ccknbr(s_, s))
+        #                 self.bptr_map[s_[0]][s_[1]] = s
+        #             if self.rhs(s_) > self.compute_cost(s_, s, self.cknbr(s_, s)):
+        #                 self.rhs_map[s_[0]][s_[1]] = self.compute_cost(s_, self.cknbr(s_, s), s)
+        #                 self.bptr_map[s_[0]][s_[1]] = self.cknbr(s_, s)
+        #             if not math.isclose(self.rhs(s), rhs_old):
+        #                 self.update_state(s_)
+        #     else:
+        #         self.rhs_map[s[0]][s[1]] = self.min_cost_in_neigbor(s)
+        #         self.bptr_map[s[0]][s[1]] = self.min_idx_in_neigbor(s)
+        #         if self.g(s) < self.rhs(s):
+        #             self.g_map[s[0]][s[1]] = float('inf')
+        #             for s_ in self.get_neigbors(s):
+        #                 if np.all(self.bptr(s_) == s) or np.all(self.bptr(s_) == self.cknbr(s_, s)):
+        #                     if not math.isclose(self.rhs(s_), self.compute_cost(s_, self.bptr(s_), self.ccknbr(s_, self.bptr(s_)))):
+        #                         if self.g(s_) < self.rhs(s_) or not self.is_open(s_):
+        #                             self.rhs_map[s_[0]][s_[1]] = float('inf')
+        #                             self.update_state(s_)
+        #                         else:
+        #                             self.rhs_map[s_[0]][s_[1]] = self.min_cost_in_neigbor(s_)
+        #                             self.bptr_map[s_[0]][s_[1]] = self.min_idx_in_neigbor(s_)
+        #                             self.update_state(s_)
+        #                 self.visted_map[s_[0]][s_[1]] = 1
+        #         self.update_state(s)
 
     def update_cell_cost(self, x, c):
         if c > x:
@@ -1034,11 +1121,17 @@ class FieldDstar(GridBasePathPlanning):
 
     def min_cost_in_neigbor(self, s: np.ndarray) -> float:
         min_cost = float('inf')
-        for s_ in self.get_neigbors():
+        for s_ in self.get_neigbors(s):
             cost = self.compute_cost(s, s_, self.ccknbr(s, s_))
             if min_cost > cost:
                 min_cost = cost
-        return cost
+        return min_cost
+        # min_cost = float('inf')
+        # for s_ in self.get_neigbors():
+        #     cost = self.compute_cost(s, s_, self.ccknbr(s, s_))
+        #     if min_cost > cost:
+        #         min_cost = cost
+        # return cost
 
     def min_idx_of_opened(self):
         x_idxes, y_idxes = np.where(self.opened_map == 1)
@@ -1116,12 +1209,7 @@ class FieldDstar(GridBasePathPlanning):
             draw_map = self.local_grid_map
 
         # Draw Obstacles
-        for obstacle in obstacles:
-            enl_obs = patches.Circle(xy=(obstacle.pos[0], obstacle.pos[1]), radius=obstacle.r + enlarge_range, fc='gray', ec='gray', zorder=-1.0)
-            ax.add_patch(enl_obs)
-        for obstacle in obstacles:
-            obs = patches.Circle(xy=(obstacle.pos[0], obstacle.pos[1]), radius=obstacle.r, fc='black', ec='black', zorder=-1.0)
-            ax.add_patch(obs)
+        draw_obstacles(ax, obstacles, enlarge_range)
 
         # Draw Map
         if map_name == 'cost':
