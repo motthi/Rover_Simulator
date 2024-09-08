@@ -105,14 +105,18 @@ class GridMapper(Mapper):
                     u = rover_idx + np.array([i, j])
                     if self.isOutOfBounds(u):
                         continue
-                    # sensed_grids.append(u)
                     if self.map[u[0]][u[1]] <= 0.5:
                         self.map[u[0]][u[1]] = 0.01
 
+            update_idxes = []
+            update_idxes = set()
             for pt in sensing_results:
-                # idx = self.poseToIndex(pt + rover_estimated_pose[:2])
+                idx = self.poseToIndex(pt + rover_estimated_pose[:2])
+                idx_tuple = tuple(idx)
+                if idx_tuple in update_idxes:
+                    continue
+                update_idxes.add(idx_tuple)
                 self.update_circle(pt + rover_estimated_pose[:2], self.rover_r, 0.95)
-                # self.map[idx[0]][idx[1]] = 0.95
 
             # list up observed grids
             self.observed_grids = []
@@ -164,22 +168,30 @@ class GridMapper(Mapper):
                         self.map[hit_idx[0] + 1][hit_idx[1] + 1] = 0.95
                         self.observed_grids.append([hit_idx + np.array([1, 1]), 0.95])
 
-    def update_circle(self, pos, r, occupancy):
+    def update_circle(self, pos: np.ndarray, r: float, occupancy: float):
         updated_grids = []
-        range_minus = -np.arange(self.grid_width, r + 1e-5, self.grid_width)
-        range_plus = np.arange(0, r + 1e-5, self.grid_width)
-        lattice_range = np.append(range_minus, range_plus)
+        updated_set = set()
+        grid_width = self.grid_width
+        pos_x, pos_y = pos
+        r2 = r * r
+
+        lattice_range = np.arange(-r, r + grid_width, grid_width)
+
         for lattice_x in lattice_range:
             for lattice_y in lattice_range:
-                if np.linalg.norm(np.array([lattice_x, lattice_y])) > r:
-                    continue
-                lattice_pos = np.array([lattice_x, lattice_y]) + pos
-                u = self.poseToIndex(lattice_pos)
+                dist2 = lattice_x * lattice_x + lattice_y * lattice_y
+                if dist2 > r2:
+                    continue  # 円の外なら無視
+                lattice_pos_x = lattice_x + pos_x
+                lattice_pos_y = lattice_y + pos_y
+                u = self.poseToIndex((lattice_pos_x, lattice_pos_y))
                 if self.isOutOfBounds(u):
                     continue
-                if not is_in_list(u, [grids[0] for grids in updated_grids]):
+                u_tuple = tuple(u)
+                if u_tuple not in updated_set:
                     self.map[u[0]][u[1]] = occupancy
                     updated_grids.append([u, occupancy])
+                    updated_set.add(u_tuple)
         return updated_grids
 
     def update_rectangle(self, xy, width, height, angle, occupancy):
@@ -201,10 +213,12 @@ class GridMapper(Mapper):
         return updated_grids
 
     def poseToIndex(self, pose: np.ndarray) -> np.ndarray:
-        return round_off(np.array(pose[0:2]) / self.grid_width).astype('int32')
+        return np.round(np.array(pose[0:2]) / self.grid_width).astype(np.int32)
+        # return round_off(np.array(pose[0:2]) / self.grid_width).astype('int32')
 
     def indexToPose(self, idx):
-        return np.append(idx * self.grid_width, 0.0)
+        return np.array([idx[0] * self.grid_width, idx[1] * self.grid_width, 0.0])
+        # return np.append(idx * self.grid_width, 0.0)
 
     def isOutOfBounds(self, idx: np.ndarray) -> bool:
         # if np.any(idx >= self.grid_num) or np.any(idx < [0, 0]):
