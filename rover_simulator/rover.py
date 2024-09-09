@@ -7,15 +7,14 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from matplotlib.axes import Axes
 from rover_simulator.core import *
-from rover_simulator.utils.draw import environment_cmap, set_fig_params
+from rover_simulator.utils.draw import environment_cmap, set_fig_params, draw_obstacles
 from rover_simulator.utils.motion import state_transition
-from rover_simulator.core import Obstacle, SensingPlanner
+from rover_simulator.core import SensingPlanner
 from rover_simulator.world import World
 from rover_simulator.history import History, HistoryWithKalmanFilter
-from rover_simulator.collision_detector import IgnoreCollision
+from rover_simulator.collision_detector import IgnoreCollision, CollisionDetector
 from rover_simulator.navigation.localizer import KalmanFilter
 from rover_simulator.navigation.mapper import GridMapper
-from rover_simulator.navigation.path_planner import PathPlanner
 from rover_simulator.navigation.path_planner.grid_base import GridBasePathPlanning
 from rover_simulator.navigation.controller import DwaController
 from rover_simulator.navigation.sensing_planner import SimpleSensingPlanner
@@ -300,6 +299,8 @@ class RoverAnimation():
         self.rover = rover
         self.path_planner = path_planner
         self.waypoints = []
+        self.fig = None
+        self.ani = None
 
     def animate(
         self,
@@ -307,14 +308,13 @@ class RoverAnimation():
         xlim: list[float] = None, ylim: list[float] = None,
         start_step: int = 0, end_step: int = None,
         map_name: str = 'cost',
-        enlarge_range: float = 0.0
+        expand_dist: float = 0.0
     ) -> None:
         end_step = self.world.step if end_step is None else end_step
-        self.fig, ax = set_fig_params(figsize=figsize, xlim=xlim, ylim=ylim)
+        self.fig, ax = set_fig_params(figsize, xlim, ylim)
 
         if map_name == 'cost':
-            for obstacle in self.world.obstacles:
-                obstacle.draw(ax, enlarge_range)
+            draw_obstacles(ax, self.world.obstacles, expand_dist)
 
         self.rover.mapper.reset()
         if self.path_planner:
@@ -350,82 +350,6 @@ class RoverAnimation():
         xn = x + self.rover.r * np.cos(theta)
         yn = y + self.rover.r * np.sin(theta)
 
-        # Sensing, Mapping and Path Planning
-        sensed_obstacles = self.rover.history.sensing_results[start_step + i]
-        if sensed_obstacles is not None:
-            self.rover.mapper.update(self.rover.history.estimated_poses[start_step + i], sensed_obstacles)
-            if self.rover.path_planner is not None and not self.rover.mapper.isOutOfBounds(self.rover.mapper.poseToIndex(self.rover.history.estimated_poses[start_step + i])):
-                self.waypoints = self.rover.path_planner.update_path(self.rover.history.estimated_poses[start_step + i], self.rover.mapper)
-            sensing_range = patches.Wedge(
-                (x, y), self.rover.sensor.range,
-                theta1=np.rad2deg(theta - self.rover.sensor.fov / 2),
-                theta2=np.rad2deg(theta + self.rover.sensor.fov / 2),
-                alpha=0.5,
-                color="mistyrose"
-            )
-            elems.append(ax.add_patch(sensing_range)) if not elems is None else None
-
-        elems += ax.plot(self.waypoints[:, 0], self.waypoints[:, 1], linewidth=1.0, linestyle="-", color='blue')
-
-        # if self.rover.mapper.retain_range is not None and not elems is None:
-        #     map_range = patches.Circle(xy=(x, y), radius=self.rover.mapper.retain_range, ec='blue', fill=False)
-        #     elems.append(ax.add_patch(map_range))
-
-        if not elems is None:
-            alpha = 1.0
-            for obstacle in self.rover.mapper.obstacles_table:
-                enl_obs = patches.Circle(xy=(obstacle.pos[0], obstacle.pos[1]), radius=obstacle.r + self.rover.r, alpha=alpha, fc='gray', ec='gray', zorder=-1.0)
-                elems.append(ax.add_patch(enl_obs))
-
-            for obstacle in self.rover.mapper.obstacles_table:
-                obs = patches.Circle(xy=(obstacle.pos[0], obstacle.pos[1]), radius=obstacle.r, alpha=alpha, fc='black', ec='black', zorder=-1.0)
-                elems.append(ax.add_patch(obs))
-
-            if map_name != 'table':
-                if map_name == 'cost':
-                    draw_map = self.rover.path_planner.g_map
-                    cmap = 'plasma'
-                    vmin = None
-                    vmax = None
-                    grid_width = self.rover.path_planner.grid_width
-                    grid_num = self.rover.path_planner.grid_num
-                elif map_name == 'metric':
-                    draw_map = self.rover.path_planner.metric_grid_map
-                    cmap = environment_cmap
-                    vmin = -1.0
-                    vmax = 1.0
-                    grid_width = self.rover.path_planner.grid_width
-                    grid_num = self.rover.path_planner.grid_num
-                elif map_name == 'local':
-                    draw_map = self.rover.path_planner.local_grid_map
-                    cmap = 'Greys'
-                    vmin = 0.0
-                    vmax = 1.0
-                    grid_width = self.rover.path_planner.grid_width
-                    grid_num = self.rover.path_planner.grid_num
-                elif map_name == 'map':
-                    draw_map = self.rover.mapper.map
-                    cmap = 'Greys'
-                    vmin = 0.0
-                    vmax = 1.0
-                    grid_width = self.rover.mapper.grid_width
-                    grid_num = self.rover.mapper.grid_num
-                im = ax.imshow(
-                    cv2.rotate(draw_map, cv2.ROTATE_90_COUNTERCLOCKWISE),
-                    cmap=cmap,
-                    vmin=vmin,
-                    vmax=vmax,
-                    alpha=0.5,
-                    extent=(
-                        -grid_width / 2,
-                        grid_width * grid_num[0] - grid_width / 2,
-                        -grid_width / 2, grid_width * grid_num[1] - grid_width / 2
-                    ),
-                    zorder=1.0
-                )
-                elems.append(im)
-                elems.append(plt.colorbar(im))
-
         # Draw rover real pose history
         if not elems is None:
             elems += ax.plot([x, xn], [y, yn], color=self.rover.color)
@@ -440,8 +364,72 @@ class RoverAnimation():
         if not elems is None:
             c = patches.Circle(xy=(x, y), radius=self.rover.r, fill=False, color=self.rover.color)
             elems.append(ax.add_patch(c))
+        # Sensing, Mapping and Path Planning
+        sensed_obstacles = self.rover.history.sensing_results[start_step + i]
+        if sensed_obstacles is not None:
+            self.rover.mapper.update(self.rover.history.estimated_poses[start_step + i], sensed_obstacles)
+
+            if self.rover.path_planner is not None and not self.rover.mapper.isOutOfBounds(self.rover.mapper.poseToIndex(self.rover.history.estimated_poses[start_step + i])):
+                self.waypoints = self.rover.path_planner.update_path(self.rover.history.estimated_poses[start_step + i], self.rover.mapper)
+            sensing_range = patches.Wedge(
+                (x, y), self.rover.sensor.range,
+                theta1=np.rad2deg(theta - self.rover.sensor.fov / 2),
+                theta2=np.rad2deg(theta + self.rover.sensor.fov / 2),
+                alpha=0.5,
+                color="mistyrose"
+            )
+            elems.append(ax.add_patch(sensing_range)) if not elems is None else None
+
+        if len(self.waypoints) > 0:
+            elems += ax.plot(self.waypoints[:, 0], self.waypoints[:, 1], linewidth=1.0, linestyle="-", color='blue')
+
+        if map_name != 'table':
+            if map_name == 'cost':
+                draw_map = self.rover.path_planner.g_map
+                cmap = 'plasma'
+                vmin = None
+                vmax = None
+                grid_width = self.rover.path_planner.grid_width
+                grid_num = self.rover.path_planner.grid_num
+            elif map_name == 'metric':
+                draw_map = self.rover.path_planner.metric_grid_map
+                cmap = environment_cmap
+                vmin = -1.0
+                vmax = 1.0
+                grid_width = self.rover.path_planner.grid_width
+                grid_num = self.rover.path_planner.grid_num
+            elif map_name == 'local':
+                draw_map = self.rover.path_planner.local_grid_map
+                cmap = 'Greys'
+                vmin = 0.0
+                vmax = 1.0
+                grid_width = self.rover.path_planner.grid_width
+                grid_num = self.rover.path_planner.grid_num
+            elif map_name == 'map':
+                draw_map = self.rover.mapper.map
+                cmap = 'Greys'
+                vmin = 0.0
+                vmax = 1.0
+                grid_width = self.rover.mapper.grid_width
+                grid_num = self.rover.mapper.grid_num
+            im = ax.imshow(
+                cv2.rotate(draw_map, cv2.ROTATE_90_COUNTERCLOCKWISE),
+                cmap=cmap,
+                vmin=vmin,
+                vmax=vmax,
+                alpha=0.5,
+                extent=(
+                    -grid_width / 2,
+                    grid_width * grid_num[0] - grid_width / 2,
+                    -grid_width / 2, grid_width * grid_num[1] - grid_width / 2
+                ),
+                zorder=1.0
+            )
+            elems.append(im)
+            elems.append(self.fig.colorbar(im))
 
         pbar.update(1) if not pbar is None else None
+        return
 
     def save_animation(self, src: str, writer='ffmpeg'):
         if self.ani:

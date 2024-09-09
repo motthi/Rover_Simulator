@@ -80,15 +80,15 @@ class SimpleHistory(History):
         xlim: list[float] = None, ylim: list[float] = None,
         figsize: tuple[float, float] = (8, 8),
         obstacles: list[Obstacle] = [],
-        enlarge_range: float = 0.0,
+        expand_dist: float = 0.0,
         draw_waypoints_flag: bool = False,
         draw_sensing_points_flag: bool = False,
         draw_sensing_area_flag: bool = False
     ):
         self.fig, ax = set_fig_params(figsize, xlim, ylim)
-        draw_obstacles(ax, obstacles, enlarge_range)
+        draw_obstacles(ax, obstacles, expand_dist)
 
-        draw_sensing_results(ax, self.real_poses, self.sensor.range, self.sensor.fov, self.sensing_results, draw_sensing_points_flag, draw_sensing_area_flag)
+        # draw_sensing_results(ax, self.real_poses, self.sensor.range, self.sensor.fov, self.sensing_results, draw_sensing_points_flag, draw_sensing_area_flag) @todo re-implement
         draw_rover(ax, self.real_poses[-1], self.rover_r, self.rover_color)  # Last rover position and angle
         draw_rover(ax, self.estimated_poses[-1], self.rover_r, self.rover_color)  # Last rover position and angle
 
@@ -105,7 +105,7 @@ class SimpleHistory(History):
         start_step: int = 0, end_step: int = None,
         start_pos: np.ndarray = None, goal_pos: np.ndarray = None,
         obstacles: list[Obstacle] = [],
-        enlarge_range: float = 0.0,
+        expand_dist: float = 0.0,
         draw_waypoints_flag: bool = False,
         draw_sensing_results_flag: bool = False,
         draw_sensing_points_flag: bool = True
@@ -113,7 +113,7 @@ class SimpleHistory(History):
         end_step = len(self.steps) if end_step is None else end_step
         end_step = end_step if end_step > len(self.steps) else len(self.steps)
         self.fig, ax = set_fig_params(figsize, xlim, ylim)
-        draw_obstacles(ax, obstacles, enlarge_range)
+        draw_obstacles(ax, obstacles, expand_dist)
         draw_start(ax, start_pos) if start_pos is not None else None
         draw_goal(ax, goal_pos) if goal_pos is not None else None
 
@@ -198,7 +198,7 @@ class HistoryWithKalmanFilter(SimpleHistory):
         xlim: list[float] = None, ylim: list[float] = None,
         figsize: tuple[float, float] = (8, 8),
         obstacles: list[Obstacle] = [],
-        enlarge_range: float = 0.0,
+        expand_dist: float = 0.0,
         draw_waypoints_flag: bool = False,
         draw_error_ellipse_flag: bool = True,
         draw_sensing_results_flag: bool = False,
@@ -207,7 +207,7 @@ class HistoryWithKalmanFilter(SimpleHistory):
         plot_step_uncertainty: int = 20
     ):
         self.fig, ax = set_fig_params(figsize, xlim, ylim)
-        draw_obstacles(ax, obstacles, enlarge_range)
+        draw_obstacles(ax, obstacles, expand_dist)
 
         draw_sensing_results(ax, self.real_poses, self.sensor_range, self.sensor_fov, self.sensing_results, draw_sensing_points_flag, draw_sensing_area_flag) if draw_sensing_results_flag else None
         draw_rover(ax, self.real_poses[-1], self.rover_r, self.rover_color)  # Last rover position and angle
@@ -224,7 +224,7 @@ class HistoryWithKalmanFilter(SimpleHistory):
         start_step: int = 0, end_step: int = None,
         start_pos: np.ndarray = None, goal_pos: np.ndarray = None,
         obstacles: list[Obstacle] = [],
-        enlarge_range: float = 0.0,
+        expand_dist: float = 0.0,
         draw_waypoints_flag: bool = False,
         draw_error_ellipse_flag: bool = True,
         draw_sensing_results_flag: bool = False,
@@ -234,7 +234,7 @@ class HistoryWithKalmanFilter(SimpleHistory):
         end_step = len(self.steps) if end_step is None else end_step
         end_step = end_step if end_step > len(self.steps) else len(self.steps)
         self.fig, ax = set_fig_params(figsize, xlim, ylim)
-        draw_obstacles(ax, obstacles, enlarge_range)
+        draw_obstacles(ax, obstacles, expand_dist)
         draw_start(ax, start_pos) if start_pos is not None else None
         draw_goal(ax, goal_pos) if goal_pos is not None else None
 

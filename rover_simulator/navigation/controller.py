@@ -198,12 +198,12 @@ class DwaController(Controller):
         start_pos: np.ndarray = None,
         goal_pos: np.ndarray = None,
         rover_poses: list[np.ndarray] = None,
-        enlarge_range: float = 0.0,
+        expand_dist: float = 0.0,
         end_step=None,
         axes_setting: list = [0.09, 0.07, 0.85, 0.9]
     ) -> None:
         self.fig, ax = set_fig_params(figsize, xlim, ylim, axes_setting)
-        draw_obstacles(ax, obstacles, enlarge_range)
+        draw_obstacles(ax, obstacles, expand_dist)
         draw_start(ax, start_pos)
         draw_goal(ax, goal_pos)
         elems = []

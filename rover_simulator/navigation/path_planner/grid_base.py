@@ -5,9 +5,9 @@ import math
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
-from rover_simulator.core import Mapper, Obstacle
+from rover_simulator.core import Mapper, PathPlanner, Obstacle
 from rover_simulator.navigation.mapper import GridMapper
-from rover_simulator.navigation.path_planner import PathPlanner, PathNotFoundError
+from rover_simulator.navigation.path_planner import PathNotFoundError
 from rover_simulator.utils.utils import round_off
 from rover_simulator.utils.draw import set_fig_params, draw_grid_map, draw_grid_map_contour, draw_obstacles, draw_start, draw_goal, environment_cmap
 
@@ -253,12 +253,12 @@ class Dijkstra(GridBasePathPlanning):
         figsize: tuple[float, float] = (8, 8),
         obstacles: list[Obstacle] = [],
         map_name: str = 'cost',
-        enlarge_range: float = 0.0,
+        expand_dist: float = 0.0,
         draw_map=True,
         draw_contour=True
     ):
         self.fig, ax = set_fig_params(figsize, xlim, ylim)
-        draw_obstacles(ax, obstacles, enlarge_range)
+        draw_obstacles(ax, obstacles, expand_dist)
 
         # Draw Map
         if map_name == 'cost':
@@ -574,7 +574,7 @@ class DstarLite(GridBasePathPlanning):
         figsize: tuple[float, float] = (8, 8),
         map_name: str = 'cost',
         obstacles: list[Obstacle] = [],
-        enlarge_range: float = 0.0,
+        expand_dist: float = 0.0,
         draw_map: bool = True,
         draw_contour: bool = True
     ):
@@ -588,7 +588,7 @@ class DstarLite(GridBasePathPlanning):
             map = self.local_grid_map
 
         # Draw Obstacles
-        draw_obstacles(ax, obstacles, enlarge_range)
+        draw_obstacles(ax, obstacles, expand_dist)
 
         # Draw Map
         if map_name == 'cost':
@@ -1197,7 +1197,7 @@ class FieldDstar(GridBasePathPlanning):
         figsize: tuple[float, float] = (8, 8),
         map_name: str = 'cost',
         obstacles: list[Obstacle] = [],
-        enlarge_range: float = 0.0,
+        expand_dist: float = 0.0,
     ):
         self.fig, ax = set_fig_params(figsize, xlim, ylim)
 
@@ -1209,7 +1209,7 @@ class FieldDstar(GridBasePathPlanning):
             draw_map = self.local_grid_map
 
         # Draw Obstacles
-        draw_obstacles(ax, obstacles, enlarge_range)
+        draw_obstacles(ax, obstacles, expand_dist)
 
         # Draw Map
         if map_name == 'cost':

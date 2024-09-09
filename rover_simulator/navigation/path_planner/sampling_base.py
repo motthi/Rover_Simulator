@@ -8,8 +8,7 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from matplotlib.axes import Axes
 from scipy.spatial import cKDTree
-from rover_simulator.navigation.path_planner import PathPlanner
-from rover_simulator.core import Obstacle
+from rover_simulator.core import Obstacle, PathPlanner
 from rover_simulator.utils.utils import set_angle_into_range
 from rover_simulator.utils.cmotion.cmotion import state_transition, covariance_transition, prob_collision
 from rover_simulator.utils.draw import set_fig_params, draw_obstacles, draw_start, draw_goal, sigma_ellipse
@@ -42,7 +41,7 @@ class RRT(PathPlanner):
         start_pos: np.ndarray = None, goal_pos: np.ndarray = None,
         explore_region: list = [[0, 20], [0, 20]],
         known_obstacles: list[Obstacle] = [],
-        enlarge_range: float = 0.0,
+        expand_dist: float = 0.0,
         expand_distance: float = 3.0,
         goal_sample_rate: float = 0.9,
         path_resolution: float = 0.5,
@@ -60,7 +59,7 @@ class RRT(PathPlanner):
         self.goal_sample_rate = goal_sample_rate
         self.expand_dis = expand_distance
         self.path_resolution = path_resolution
-        self.enlarge_range = enlarge_range
+        self.expand_dist = expand_dist
         if cost_func is None:
             self.cost = self.dist_nodes
         else:
@@ -156,7 +155,7 @@ class RRT(PathPlanner):
             return False
         for obs in obstacle_list:
             for x1, y1, x2, y2 in zip(node.path_x[:-1], node.path_y[:-1], node.path_x[1:], node.path_y[1:]):
-                if obs.check_collision_line(np.array([x1, y1]), np.array([x2, y2]), self.enlarge_range):
+                if obs.check_collision_line(np.array([x1, y1]), np.array([x2, y2]), self.expand_dist):
                     return False  # collision
         return True  # safe
 
@@ -271,10 +270,10 @@ class RRT(PathPlanner):
             xlim: list[float] = None, ylim: list[float] = None,
             figsize: tuple[float, float] = (8, 8),
             obstacles: list = [],
-            enlarge_range: float = 0.0,
+            expand_dist: float = 0.0,
     ):
         self.fig, ax = set_fig_params(figsize, xlim, ylim)
-        draw_obstacles(ax, obstacles, enlarge_range)
+        draw_obstacles(ax, obstacles, expand_dist)
         self.draw_nodes(ax)
         self.draw_path(ax)
         draw_start(ax, self.start_pos)
@@ -285,12 +284,12 @@ class RRT(PathPlanner):
         self,
         xlim: list[float] = None, ylim: list[float] = None,
         figsize: tuple[float, float] = (8, 8),
-        enlarge_range: float = 0.0,
+        expand_dist: float = 0.0,
         end_step=None,
         axes_setting: list = [0.09, 0.07, 0.85, 0.9]
     ) -> None:
         self.fig, ax = set_fig_params(figsize, xlim, ylim, axes_setting)
-        draw_obstacles(ax, self.known_obstacles, enlarge_range)
+        draw_obstacles(ax, self.known_obstacles, expand_dist)
         draw_start(ax, self.start_pos)
         draw_goal(ax, self.goal_pos)
         elems = []
@@ -332,8 +331,8 @@ class RRTstar(RRT):
         start_pos: np.ndarray = None, goal_pos: np.ndarray = None,
         explore_region: list = [[0, 20], [0, 20]],
         known_obstacles: list = [],
-        enlarge_range: float = 0.0,
-        expand_distance: float = 3.0,
+        expand_dist: float = 0.0,   # Obstacle expand distance
+        expand_distance: float = 3.0,   # Node expand distance @todo rename
         goal_sample_rate: float = 0.9,
         path_resolution: float = 0.5,
         connect_circle_dist: float = 50.0,
@@ -347,7 +346,7 @@ class RRTstar(RRT):
         obstacleList:obstacle Positions [[x,y,size],...]
         randArea:Random Sampling Area [min,max]
         """
-        super().__init__(start_pos, goal_pos, explore_region, known_obstacles, enlarge_range, expand_distance, path_resolution, goal_sample_rate, cost_func)
+        super().__init__(start_pos, goal_pos, explore_region, known_obstacles, expand_dist, expand_distance, path_resolution, goal_sample_rate, cost_func)
         self.connect_circle_dist = connect_circle_dist
         self.search_until_max_iter = search_until_max_iter
         self.nodes_history = []
@@ -546,14 +545,15 @@ class RRTstar(RRT):
         self,
         xlim: list[float] = None, ylim: list[float] = None,
         figsize: tuple[float, float] = (8, 8),
-        enlarge_range: float = 0.0,
+        expand_dist: float = 0.0,
         end_step=None,
         axes_setting: list = [0.09, 0.07, 0.85, 0.9]
     ) -> None:
         self.fig, ax = set_fig_params(figsize, xlim, ylim, axes_setting)
-        draw_obstacles(ax, self.known_obstacles, enlarge_range)
+        draw_obstacles(ax, self.known_obstacles, expand_dist)
         draw_start(ax, self.start_pos)
         draw_goal(ax, self.goal_pos)
+
         elems = []
 
         # Start Animation
@@ -747,13 +747,13 @@ class ChanceConstrainedRRT(RRT):
         self,
         start_pos: np.ndarray = None, goal_pos: np.ndarray = None, start_cov: np.ndarray = None,
         start_head: float = None, motion_noise_stds: dict = {"nn": 0.1, "no": 0.0001, "on": 0.013, "oo": 0.02},
-        explore_region: list = [[0, 20], [0, 20]], known_obstacles: list = [], enlarge_range: float = 0,
+        explore_region: list = [[0, 20], [0, 20]], known_obstacles: list = [], expand_dist: float = 0,
         expand_distance: float = 3.0, path_resolution: float = 1.0,
         cost_func=None, steer_func=None,
         goal_sample_rate: float = 0.01, goal_region=2.0,
         num_nearest_node: int = 6, p_safe: float = 0.99, k: float = 1.0
     ) -> None:
-        super().__init__(start_pos, goal_pos, explore_region, known_obstacles, enlarge_range, expand_distance, goal_sample_rate, path_resolution, cost_func)
+        super().__init__(start_pos, goal_pos, explore_region, known_obstacles, expand_dist, expand_distance, goal_sample_rate, path_resolution, cost_func)
         if start_pos is not None and goal_pos is not None and start_cov is not None:
             if start_head is None:
                 start_head = np.arctan2(goal_pos[1] - start_pos[1], goal_pos[0] - start_pos[0])
@@ -1095,12 +1095,12 @@ class ChanceConstrainedRRT(RRT):
             xlim: list[float] = None, ylim: list[float] = None,
             figsize: tuple[float, float] = (8, 8),
             obstacles: list = [],
-            enlarge_range: float = 0.0,
+            expand_dist: float = 0.0,
             draw_ellipse_flag: bool = True,
             draw_result_only: bool = False
     ) -> None:
         self.fig, ax = set_fig_params(figsize, xlim, ylim)
-        draw_obstacles(ax, obstacles, enlarge_range)
+        draw_obstacles(ax, obstacles, expand_dist)
         self.draw_nodes(ax, draw_ellipse_flag) if draw_result_only is False else None
         self.draw_path(ax, "red", draw_ellipse_flag)
         draw_start(ax, self.start_pos)
@@ -1137,14 +1137,14 @@ class ChanceConstrainedRRT(RRT):
         self,
         xlim: list[float], ylim: list[float],
         figsize: tuple[float, float] = (8, 8),
-        enlarge_range: float = 0.0,
+        expand_dist: float = 0.0,
         end_step=None,
         draw_ellipse_flag: bool = True,
         axes_setting: list = [0.09, 0.07, 0.85, 0.9],
         interval=100,
     ) -> None:
         self.fig, ax = set_fig_params(figsize, xlim, ylim, axes_setting)
-        draw_obstacles(ax, self.known_obstacles, enlarge_range)
+        draw_obstacles(ax, self.known_obstacles, expand_dist)
         draw_start(ax, self.start_pos)
         draw_goal(ax, self.goal_pos)
         elems = []
@@ -1191,12 +1191,12 @@ class ChanceConstrainedRRTstar(ChanceConstrainedRRT):
         start_pos: np.ndarray = None, goal_pos: np.ndarray = None, start_cov: np.ndarray = None, start_head: float = None,
         motion_noise_stds: dict = {"nn": 0.1, "no": 0.0001, "on": 0.013, "oo": 0.02},
         explore_region: list = [[0, 20], [0, 20]],
-        known_obstacles: list = [], enlarge_range: float = 0, expand_distance: float = 3, path_resolution: float = 3.0,
+        known_obstacles: list = [], expand_dist: float = 0, expand_distance: float = 3, path_resolution: float = 3.0,
         cost_func=None, steer_func=None,
         goal_sample_rate: float = 0.3, goal_region=2, num_nearest_node: int = 6,
         p_safe: float = 0.99, k: float = 1, mu: float = 10.0
     ) -> None:
-        super().__init__(start_pos, goal_pos, start_cov, start_head, motion_noise_stds, explore_region, known_obstacles, enlarge_range, expand_distance, path_resolution, cost_func, steer_func, goal_sample_rate, goal_region, num_nearest_node, p_safe, k)
+        super().__init__(start_pos, goal_pos, start_cov, start_head, motion_noise_stds, explore_region, known_obstacles, expand_dist, expand_distance, path_resolution, cost_func, steer_func, goal_sample_rate, goal_region, num_nearest_node, p_safe, k)
         self.mu = mu
         self.mu_xfree = (explore_region[0][1] - explore_region[0][0]) * (explore_region[1][1] - explore_region[1][0])
         for obs in known_obstacles:
@@ -1313,13 +1313,13 @@ class ChanceConstrainedRRTstar(ChanceConstrainedRRT):
         self,
         xlim: list[float] = None, ylim: list[float] = None,
         figsize: tuple[float, float] = (8, 8),
-        enlarge_range: float = 0.0,
+        expand_dist: float = 0.0,
         end_step=None,
         draw_ellipse_flag: bool = True,
         axes_setting: list = [0.09, 0.07, 0.85, 0.9]
     ) -> None:
         self.fig, ax = set_fig_params(figsize, xlim, ylim, axes_setting)
-        draw_obstacles(ax, self.known_obstacles, enlarge_range)
+        draw_obstacles(ax, self.known_obstacles, expand_dist)
         draw_start(ax, self.start_pos)
         draw_goal(ax, self.goal_pos)
         elems = []

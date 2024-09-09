@@ -56,7 +56,7 @@ def save_ani(src: str, ani: FuncAnimation, dpi: int = 300):
     ani.save(src, dpi=dpi)
 
 
-def draw_rover(ax: Axes, pose: np.ndarray, r: float, color=None):
+def draw_rover(ax: Axes, pose: np.ndarray, r: float, color: str = None):
     x, y, theta = pose
     xn = x + r * np.cos(theta)
     yn = y + r * np.sin(theta)
@@ -67,9 +67,9 @@ def draw_rover(ax: Axes, pose: np.ndarray, r: float, color=None):
     ax.add_patch(cir)
 
 
-def draw_obstacles(ax: Axes, obstacles: list[Obstacle], enlarge_range, alpha=1.0, color_enlarge='gray') -> None:
+def draw_obstacles(ax: Axes, obstacles: list[Obstacle], expand_dist: float = 0.0, alpha: float = 1.0, color_enlarge: str = 'gray') -> None:
     for obstacle in obstacles:
-        obstacle.draw(ax, enlarge_range, alpha, color_enlarge)
+        obstacle.draw(ax, expand_dist, alpha, color_enlarge)
 
 
 def draw_start(ax: Axes, start_pos: np.ndarray) -> None:
@@ -134,7 +134,7 @@ def draw_grid(idx: np.ndarray, grid_width: float, color: str, alpha: float, ax: 
         ax.add_patch(r)
 
 
-def draw_grid_map_contour(ax: Axes, grid_map, grid_num, grid_width, levels):
+def draw_grid_map_contour(ax: Axes, grid_map: np.ndarray, grid_num: list, grid_width: float, levels):
     x = np.linspace(0, grid_num[0], grid_num[0]) * grid_width
     y = np.linspace(0, grid_num[1], grid_num[1]) * grid_width
     X, Y = np.meshgrid(x, y)

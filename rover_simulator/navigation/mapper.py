@@ -1,4 +1,5 @@
 import numpy as np
+from matplotlib import pyplot as plt
 from scipy.spatial import cKDTree
 from rover_simulator.core import Mapper, Sensor, Obstacle
 from rover_simulator.utils.utils import is_angle_in_range, set_angle_into_range, is_in_list, round_off
@@ -48,7 +49,7 @@ class GridMapper(Mapper):
         grid_width: float = 0.1,
         sensor: Sensor = None,
         known_obstacles: list[Obstacle] = [],
-        rover_r: float = 0.0,
+        expand_dist: float = 0.0,
         expand_rate: float = 1.0
     ) -> None:
         super().__init__()
@@ -57,15 +58,14 @@ class GridMapper(Mapper):
         self.grid_num = (self.grid_size / self.grid_width).astype(np.int32)
 
         self.sensor = sensor
-        self.rover_r = rover_r
-        self.expand_rate = expand_rate
+        self.expand_dist = expand_dist
 
         self.map = np.full(self.grid_num, 0.5)
         self.observed_grids = []
 
         for obstacle in known_obstacles:
             if obstacle.type == 'circular':
-                self.update_circle(obstacle.pos, (obstacle.r + rover_r) * expand_rate, 1.0)
+                self.update_circle(obstacle.pos, obstacle.r + expand_dist, 1.0)
             elif obstacle.type == 'rectangular':
                 self.update_rectangle(obstacle.xy, obstacle.w, obstacle.h, obstacle.angle, 1.0)
 
@@ -79,7 +79,7 @@ class GridMapper(Mapper):
                         continue
                     self.sensing_grid_candidates.append([i, j])
 
-            sensing_range = (self.sensor.range + rover_r) / self.grid_width
+            sensing_range = (self.sensor.range + expand_dist) / self.grid_width
             for i in range(np.ceil(-sensing_range).astype(np.int32), np.floor(sensing_range).astype(np.int32) + 1):
                 for j in range(np.ceil(-sensing_range).astype(np.int32), np.floor(sensing_range).astype(np.int32) + 1):
                     if np.sqrt(i**2 + j**2) > sensing_range + 1e-5:
@@ -116,7 +116,7 @@ class GridMapper(Mapper):
                 if idx_tuple in update_idxes:
                     continue
                 update_idxes.add(idx_tuple)
-                self.update_circle(pt + rover_estimated_pose[:2], self.rover_r, 0.95)
+                self.update_circle(pt + rover_estimated_pose[:2], self.expand_dist, 0.95)
 
             # list up observed grids
             self.observed_grids = []
@@ -139,7 +139,7 @@ class GridMapper(Mapper):
                     dist = self.sensor.range
                 else:
                     dist = r
-                dist -= self.rover_r
+                dist -= self.expand_dist
 
                 ang = th + rover_estimated_pose[2]
                 pt = rover_estimated_pose[:2] + np.array([dist * np.cos(ang), dist * np.sin(ang)])
@@ -175,7 +175,7 @@ class GridMapper(Mapper):
         pos_x, pos_y = pos
         r2 = r * r
 
-        lattice_range = np.arange(-r, r + grid_width, grid_width)
+        lattice_range = np.arange(-r, r + grid_width, grid_width * 0.9)
 
         for lattice_x in lattice_range:
             for lattice_y in lattice_range:
@@ -197,8 +197,8 @@ class GridMapper(Mapper):
     def update_rectangle(self, xy, width, height, angle, occupancy):
         angle = np.deg2rad(angle)
         updated_grids = []
-        range_x = np.arange(-self.rover_r, self.rover_r + width + 1e-5, self.grid_width * 0.5)
-        range_y = np.arange(-self.rover_r, self.rover_r + height + 1e-5, self.grid_width * 0.5)
+        range_x = np.arange(-self.expand_dist, self.expand_dist + width + 1e-5, self.grid_width * 0.5)
+        range_y = np.arange(-self.expand_dist, self.expand_dist + height + 1e-5, self.grid_width * 0.5)
         for lattice_x in range_x:
             for lattice_y in range_y:
                 lattice_pos = np.array([lattice_x, lattice_y])
@@ -240,7 +240,7 @@ class GridMapper(Mapper):
         xlim: list[float] = None, ylim: list[float] = None,
         figsize=(8, 8),
         obstacles: list[Obstacle] = [],
-        enlarge_range: float = 0.0,
+        expand_dist: float = 0.0,
         map_name='map'
     ) -> None:
         self.fig, ax = set_fig_params(figsize, xlim, ylim)
@@ -251,11 +251,13 @@ class GridMapper(Mapper):
         )
 
         if map_name == 'map':
-            draw_obstacles(ax, obstacles, enlarge_range)
+            draw_obstacles(ax, obstacles, expand_dist)
             draw_grid_map(ax, self.map, "Greys", 0.0, 1.0, 0.5, extent, 1.0)
         elif map_name == 'table':
-            draw_obstacles(ax, obstacles, enlarge_range, 0.3)
-            draw_obstacles(ax, self.obstacles_table, enlarge_range, 0.3)
+            draw_obstacles(ax, obstacles, expand_dist, 0.3)
+            draw_obstacles(ax, self.obstacles_table, expand_dist, 0.3)
+
+        plt.show()
 
 
 class TableMapper(Mapper):

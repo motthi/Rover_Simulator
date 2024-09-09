@@ -3,8 +3,8 @@ import sknw
 import numpy as np
 import networkx as nx
 import matplotlib.pyplot as plt
+from rover_simulator.core import PathPlanner
 from rover_simulator.utils.draw import set_fig_params, draw_grid_map
-from rover_simulator.navigation.path_planner import PathPlanner
 from rover_simulator.navigation.mapper import GridMapper
 
 
@@ -13,6 +13,8 @@ class SkeltonPlanner(PathPlanner):
         self.rescale = rescale
         self.graph = None
         self.path = None
+        self.start = None
+        self.goal = None
 
     def build_skelton_network(self, gridmap):
         sk_img = self.skeletonize(gridmap)
@@ -77,6 +79,7 @@ class SkeltonPlanner(PathPlanner):
             if s > e:
                 edge = edge[::-1]
             self.path = np.concatenate([self.path, edge], axis=0)
+        self.path = np.concatenate([np.array([self.start]), self.path, np.array([self.goal])], axis=0)
         return self.path
 
     def draw(
