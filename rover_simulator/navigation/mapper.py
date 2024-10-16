@@ -2,8 +2,9 @@ import numpy as np
 from matplotlib import pyplot as plt
 from scipy.spatial import cKDTree
 from rover_simulator.core import Mapper, Sensor, Obstacle
-from rover_simulator.utils.utils import is_angle_in_range, set_angle_into_range, is_in_list, round_off
-from rover_simulator.utils.draw import draw_grid_map, set_fig_params, draw_obstacles, draw_start, draw_goal, draw_grid
+from rover_simulator.utils.utils import is_angle_in_range, set_angle_into_range, is_in_list
+from rover_simulator.utils.draw import draw_grid_map, set_fig_params, draw_obstacles
+from rover_simulator.sensor import generate_points_in_circle
 
 
 def bresenham(pt_s, pt_e):
@@ -50,7 +51,6 @@ class GridMapper(Mapper):
         sensor: Sensor = None,
         known_obstacles: list[Obstacle] = [],
         expand_dist: float = 0.0,
-        expand_rate: float = 1.0
     ) -> None:
         super().__init__()
         self.grid_size = grid_size
@@ -65,7 +65,10 @@ class GridMapper(Mapper):
 
         for obstacle in known_obstacles:
             if obstacle.type == 'circular':
-                self.update_circle(obstacle.pos, obstacle.r + expand_dist, 1.0)
+                pts = generate_points_in_circle(obstacle.r)
+                for pt in pts:
+                    self.update_circle(pt + obstacle.pos, expand_dist, 1.0)
+                # self.update_circle(obstacle.pos, obstacle.r + expand_dist, 1.0)
             elif obstacle.type == 'rectangular':
                 self.update_rectangle(obstacle.xy, obstacle.w, obstacle.h, obstacle.angle, 1.0)
 
@@ -175,11 +178,11 @@ class GridMapper(Mapper):
         pos_x, pos_y = pos
         r2 = r * r
 
-        lattice_range = np.arange(-r, r + grid_width, grid_width * 0.9)
+        lattice_range = np.linspace(-r, r, int(2 * r / grid_width) + 2)
 
         for lattice_x in lattice_range:
             for lattice_y in lattice_range:
-                dist2 = lattice_x * lattice_x + lattice_y * lattice_y
+                dist2 = (np.fabs(lattice_x) - grid_width / 2) ** 2 + (np.fabs(lattice_y) - grid_width / 2) ** 2
                 if dist2 > r2:
                     continue  # 円の外なら無視
                 lattice_pos_x = lattice_x + pos_x
