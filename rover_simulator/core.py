@@ -112,6 +112,9 @@ class Obstacle():
     def draw(self) -> None:
         raise NotImplementedError
 
+    def draw_expanded(self) -> None:
+        raise NotImplementedError
+
 
 class CircularObstacle(Obstacle):
     def __init__(self, pos: np.ndarray, r: float) -> None:
@@ -144,11 +147,13 @@ class CircularObstacle(Obstacle):
         dist = np.sqrt((closest_x - self.pos[0])**2 + (closest_y - self.pos[1])**2)
         return dist < self.r + expand_dist
 
-    def draw(self, ax: Axes, expand_dist: float, alpha: float = 1.0, color_enlarge: str = 'black') -> None:
-        enl_obs = patches.Circle(xy=(self.pos[0], self.pos[1]), radius=self.r + expand_dist, fc=color_enlarge, ec=color_enlarge, zorder=-1.0, alpha=alpha)
+    def draw(self, ax: Axes, alpha: float = 1.0) -> None:
         obs = patches.Circle(xy=(self.pos[0], self.pos[1]), radius=self.r, fc='black', ec='black', zorder=-1.0, alpha=alpha)
-        ax.add_patch(enl_obs)
         ax.add_patch(obs)
+
+    def draw_expanded(self, ax: Axes, expand_dist: float, alpha: float = 1.0, color_enlarge: str = 'black') -> None:
+        enl_obs = patches.Circle(xy=(self.pos[0], self.pos[1]), radius=self.r + expand_dist, fc=color_enlarge, ec=color_enlarge, zorder=-1.0, alpha=alpha)
+        ax.add_patch(enl_obs)
 
 
 class RectangularObstacle(Obstacle):
@@ -244,7 +249,11 @@ class RectangularObstacle(Obstacle):
 
         return False
 
-    def draw(self, ax: Axes, expand_dist: float, alpha: float = 1.0, color_enlarge: str = 'black') -> None:
+    def draw(self, ax: Axes, alpha: float = 1.0) -> None:
+        obs = patches.Rectangle(xy=(self.xy[0], self.xy[1]), width=self.w, height=self.h, angle=self.angle, fc='black', ec='black', zorder=-1.0, alpha=alpha)
+        ax.add_patch(obs)
+
+    def draw_expanded(self, ax: Axes, expand_dist: float, alpha: float = 1.0, color_enlarge: str = 'black') -> None:
         enl_obs = patches.FancyBboxPatch(
             (self.xy[0], self.xy[1]),
             self.w,
@@ -257,9 +266,6 @@ class RectangularObstacle(Obstacle):
         )
         trans = transforms.Affine2D().rotate_deg_around(self.xy[0], self.xy[1], self.angle) + ax.transData
         enl_obs.set_transform(trans)
-        obs = patches.Rectangle(xy=(self.xy[0], self.xy[1]), width=self.w, height=self.h, angle=self.angle, fc='black', ec='black', zorder=-1.0, alpha=alpha)
-        ax.add_patch(enl_obs)
-        ax.add_patch(obs)
 
 
 class BaseCollisionDetector:

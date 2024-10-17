@@ -81,6 +81,8 @@ class SimpleHistory(History):
         figsize: tuple[float, float] = (8, 8),
         obstacles: list[Obstacle] = [],
         expand_dist: float = 0.0,
+        start_pos: np.ndarray = None,
+        goal_pos: np.ndarray = None,
         draw_waypoints_flag: bool = False,
         draw_sensing_points_flag: bool = False,
         draw_sensing_area_flag: bool = False
@@ -97,6 +99,11 @@ class SimpleHistory(History):
 
         # Draw Waypoints if draw_waypoints is True
         draw_pose(ax, self.waypoints[-1], self.waypoint_color) if draw_waypoints_flag and self.waypoints is not None else None
+
+        if start_pos is not None:
+            draw_start(ax, start_pos)
+        if goal_pos is not None:
+            draw_goal(ax, goal_pos)
 
     def animate(
         self,

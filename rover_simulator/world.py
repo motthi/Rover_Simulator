@@ -110,7 +110,7 @@ class World():
             distance = np.linalg.norm(start_pos - goal_pos)
             dist_start, idx_start = obstacle_kdTree.query(start_pos, k=1)
             dist_goal, idx_goal = obstacle_kdTree.query(goal_pos, k=1)
-            if dist_start < self.obstacles[idx_start].r + enlarged_obstacle or dist_goal < self.obstacles[idx_goal].r + enlarged_obstacle:
+            if dist_start < self.obstacles[idx_start].r + enlarged_obstacle + 1.0 or dist_goal < self.obstacles[idx_goal].r + enlarged_obstacle + 1.0:
                 is_collision = True
             else:
                 is_collision = False
@@ -133,7 +133,8 @@ class World():
         draw_waypoints_flag: bool = False,
         draw_sensing_results_flag: bool = False,
         draw_sensing_points_flag: bool = True,
-        draw_sensing_area_flag: bool = True
+        draw_sensing_area_flag: bool = True,
+        not_show: bool = False
     ):
         self.fig, ax = set_fig_params(figsize, xlim, ylim)
         draw_obstacles(ax, self.obstacles, expand_dist, 1.0, expand_color)
@@ -150,7 +151,7 @@ class World():
         draw_start(ax, start_pos) if start_pos is not None else None
         draw_goal(ax, goal_pos) if goal_pos is not None else None
         ax.legend() if legend_flag is True else None
-        plt.show()
+        plt.show() if not_show is False else None
 
     def animate(
         self,
