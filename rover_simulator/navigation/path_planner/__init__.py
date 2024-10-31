@@ -4,3 +4,7 @@ class PathNotCalculatedError(Exception):
 
 class PathNotFoundError(Exception):
     pass
+
+
+class OutOfBoundsError(Exception):
+    pass

@@ -4,10 +4,9 @@ import cv2
 import math
 import numpy as np
 import matplotlib.pyplot as plt
-import matplotlib.patches as patches
 from rover_simulator.core import Mapper, PathPlanner, Obstacle
 from rover_simulator.navigation.mapper import GridMapper
-from rover_simulator.navigation.path_planner import PathNotFoundError
+from rover_simulator.navigation.path_planner import PathNotFoundError, OutOfBoundsError
 from rover_simulator.utils.utils import round_off
 from rover_simulator.utils.draw import set_fig_params, draw_grid_map, draw_grid_map_contour, draw_obstacles, draw_start, draw_goal, environment_cmap
 
@@ -364,9 +363,9 @@ class DstarLite(GridBasePathPlanning):
         self.grid_map = copy.copy(mapper.map)
 
         if self.is_ob(self.start_idx):
-            raise ValueError("Start position is out of bounds")
+            raise OutOfBoundsError("Start position is out of bounds")
         if self.is_ob(self.goal_idx):
-            raise ValueError("Goal position is out of bounds")
+            raise OutOfBoundsError("Goal position is out of bounds")
 
         self.local_grid_map = copy.copy(mapper.map)  # センシングによって構築したマップ
         self.metric_grid_map = np.full(self.grid_num, -1.0, dtype=float)  # 経路計画で使用するマップ
