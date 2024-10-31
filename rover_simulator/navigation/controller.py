@@ -305,17 +305,22 @@ class ArcPathController(Controller):
         dv: float = 0.5,
         branch_num: int = 11,
         branch_depth: int = 5,
+        branch_dt: float = 3,
         to_goal_cost_gain: float = 0.15,
         speed_gain: float = 1.0,
         obs_cost_gain: float = 1.0,
         rover_r: float = 0.0,
-        rover_stuck_flag_cons: float = 0.001,
+        stuck_flag_cons: float = 0.001,
+        stuck_cnt_max: int = 100,
+        dt: float = 0.1
     ) -> None:
         self.v_min = v_range[0]
         self.v_max = v_range[1]
         self.w_min = w_range[0]
         self.w_max = w_range[1]
         self.dv = dv
+        self.branch_dt = branch_dt
+        self.w_stuck = np.pi / 2
 
         self.branch_num = branch_num
         self.branch_depth = branch_depth
@@ -324,9 +329,16 @@ class ArcPathController(Controller):
         self.speed_gain = speed_gain
         self.obs_cost_gain = obs_cost_gain
 
-        self.rover_stuck_flag_cons = rover_stuck_flag_cons
+        self.stuck_flag_cons = stuck_flag_cons
+        self.stuck_cnt = 0
+        self.stuck_cnt_max = stuck_cnt_max
+        self.stuck_flag = False
 
         self.rover_r = rover_r
+
+        self.path_primitives = self.generate_path_primitives(dt)
+
+        self.is_prev_rot = False
 
     def calculate_control_inputs(
         self,
@@ -340,51 +352,81 @@ class ArcPathController(Controller):
         best_u = [0.0, 0.0]
 
         # List up Trajectroy
-        traj_list = []
-        for v in np.arange(self.v_min, self.v_max + 1e-4, self.dv):
-            for w in np.linspace(self.w_min, self.w_max, self.branch_num):
+        traj_list = transform_traj_list(self.path_primitives, rover_pose)
+        # print(rover_pose)
+        # fig, ax = plt.subplots()
+        # for traj in traj_list:
+        #     ax.plot(traj[:, 0], traj[:, 1], alpha=0.5, color='black')
+        # ax.set_aspect('equal')
+        # plt.show()
+
+        # angle to the goal
+        angle_to_goal = np.arctan2(goal_pose[1] - rover_pose[1], goal_pose[0] - rover_pose[0]) - rover_pose[2]
+        while angle_to_goal > np.pi:
+            angle_to_goal -= 2 * np.pi
+        while angle_to_goal < - np.pi:
+            angle_to_goal += 2 * np.pi
+
+        if self.is_prev_rot and angle_to_goal > np.pi / 4:
+            best_u[1] = self.w_max
+        elif self.is_prev_rot and angle_to_goal < -np.pi / 4:
+            best_u[1] = self.w_min
+        elif angle_to_goal > 2 * np.pi / 3:
+            best_u[1] = self.w_max
+            self.is_prev_rot = True
+        elif angle_to_goal < -2 * np.pi / 3:
+            best_u[1] = self.w_min
+            self.is_prev_rot = True
+        else:
+            self.is_prev_rot = False
+            for traj in traj_list:
                 is_collision = False
-                if v < self.rover_stuck_flag_cons and w < self.rover_stuck_flag_cons:
-                    continue
-                x = np.append(rover_pose, [v, w])
-                x = np.array(x)
-                traj = np.array(x)
-                for _ in range(self.branch_depth):
-                    pose = state_transition(x[0:3], v, w, dt)
-                    x = np.append(pose, [v, w])
-
+                for [x, y, th, _, _] in traj:
                     # Collision Check
-                    idx = mapper.poseToIndex(pose)
-                    if mapper.map[idx[0], idx[1]] > 0.5:
+                    idx = mapper.poseToIndex(np.array([x, y, th]))
+                    if mapper.isOutOfBounds(idx) or mapper.map[idx[0], idx[1]] > 0.5:
                         is_collision = True
-
-                    traj = np.vstack((traj, x))
-                    if is_collision:
                         break
-                traj_list.append(traj) if is_collision is False else None
 
-        for trajectory in traj_list:
-            # to_goal_cost = self.to_goal_cost_gain * self.calc_to_goal_cost(trajectory, goal_pose)
-            # speed_cost = self.speed_gain * (self.v_max - trajectory[-1, 3])
-            # ob_cost = self.obs_cost_gain * self.calc_obstacle_cost(trajectory, obstacle_list)
-            to_goal_cost = self.to_goal_cost_gain * self.calc_dist_to_goal_cost(trajectory, goal_pose)
-            # final_cost = to_goal_cost + speed_cost + ob_cost
-            final_cost = to_goal_cost  # + speed_cost
+                if is_collision:
+                    continue
 
-            # search minimum trajectory
-            if min_cost >= final_cost:
-                min_cost = final_cost
-                best_u = [trajectory[-1, 3], trajectory[-1, 4]]
-                # if abs(best_u[0]) < self.rover_stuck_flag_cons and abs(trajectory[-1, 3]) < self.rover_stuck_flag_cons:
-                # to ensure the rover do not get stuck in
-                # best v=0 m/s (in front of an obstacle) and
-                # best omega=0 rad/s (heading to the goal with
-                # angle difference of 0)
-                # best_u[1] = self.w_min
+                speed_cost = self.speed_gain * (self.v_max - traj[-1, 3])
+                # ob_cost = self.obs_cost_gain * self.calc_obstacle_cost(trajectory, obstacle_list)
+                to_goal_cost = self.to_goal_cost_gain * self.calc_dist_to_goal_cost(traj, goal_pose)
+                # final_cost = to_goal_cost + speed_cost + ob_cost
+                final_cost = to_goal_cost + speed_cost
+
+                # search minimum trajectory
+                if min_cost >= final_cost:
+                    min_cost = final_cost
+                    best_u = [traj[0, 3], traj[0, 4]]
+                    # if abs(best_u[0]) < self.rover_stuck_flag_cons and abs(trajectory[-1, 3]) < self.rover_stuck_flag_cons:
+                    # to ensure the rover do not get stuck in
+                    # best v=0 m/s (in front of an obstacle) and
+                    # best omega=0 rad/s (heading to the goal with
+                    # angle difference of 0)
+                    # best_u[1] = self.w_min
+
+            if best_u[0] < self.stuck_flag_cons and best_u[1] < self.stuck_flag_cons:
+                if angle_to_goal >= 0:
+                    best_u[1] = self.w_stuck
+                elif angle_to_goal < 0:
+                    best_u[1] = -self.w_stuck
+            # if best_u[0] < self.stuck_flag_cons:
+            #     self.stuck_cnt += 1
+            #     if self.stuck_cnt > self.stuck_cnt_max:
+            #         self.stuck_flag = True
+            # else:
+            #     self.stuck_cnt = 0
+            #     self.stuck_flag = False
+
+            # from tqdm import tqdm
+            # tqdm.write(f"{best_u=}    \t{np.rad2deg(angle_to_goal)=}")
         return best_u
 
     def calc_dist_to_goal_cost(self, trajectory, goal):
-        x, y = trajectory[-1, 0], trajectory[-1, 1]
+        # x, y = trajectory[-1, 0], trajectory[-1, 1]
         cost_dist = np.linalg.norm(trajectory[-1, 0:2] - goal[0:2])
         return cost_dist
 
@@ -421,3 +463,59 @@ class ArcPathController(Controller):
 
         min_r = np.min(r)
         return 1.0 / min_r  # OK
+
+    def draw_path_primitives(self, dt: float) -> None:
+        traj_list = self.generate_path_primitives(dt)
+        traj_list = transform_traj_list(traj_list, np.array([0, 0, np.pi / 2]))
+
+        fig, ax = plt.subplots()
+        for traj in traj_list:
+            ax.plot(traj[:, 0], traj[:, 1])
+        ax.set_aspect('equal')
+        plt.show()
+
+    def generate_path_primitives(self, dt):
+        def w_lists(depth, max_depth, dt):
+            w_values = np.linspace(self.w_min, self.w_max, self.branch_num)
+            if depth == max_depth:
+                return [[]]
+
+            w_list = []
+            for w in w_values:
+                sub_w_lists = w_lists(depth + 1, max_depth, dt)
+                for sub_list in sub_w_lists:
+                    w_list.append([w] + sub_list)
+            return w_list
+        rover_pose = np.array([0, 0, 0])
+        traj_list = []
+
+        v_values = np.arange(self.v_min, self.v_max + 1e-4, self.dv)
+        w_list = w_lists(0, self.branch_depth, dt)
+        for v in v_values:
+            for w_sequence in w_list:
+                traj = np.array([np.append(rover_pose, [v, w_sequence[0]])])
+                current_pose = rover_pose
+                for depth in range(self.branch_depth):
+                    v_ = v
+                    w = w_sequence[depth]
+                    if v < 1e-3 and depth > 0:
+                        v_ = self.v_max
+                    new_pose = current_pose
+                    for i in range(int(self.branch_dt / dt)):
+                        pose = state_transition(new_pose[:3], v_, w, dt)
+                        new_pose = np.append(pose, [v, w])
+                        traj = np.vstack((traj, new_pose))
+                    current_pose = new_pose
+                traj_list.append(traj)
+        return np.array(traj_list)
+
+
+def transform_traj_list(path_primitives, pose):
+    traj_list = path_primitives.copy()
+    tho = pose[2]
+    rot = np.array([[np.cos(tho), -np.sin(tho)], [np.sin(tho), np.cos(tho)]])
+    xy_rotated = rot @ traj_list[:, :, 0:2].reshape(-1, 2).T
+    traj_list[:, :, :2] = xy_rotated.T.reshape(traj_list.shape[0], traj_list.shape[1], 2)
+    traj_list[:, :, :2] += pose[:2]
+    traj_list[:, :, 2] = traj_list[:, :, 2] + tho
+    return traj_list
