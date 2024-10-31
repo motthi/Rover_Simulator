@@ -3,6 +3,11 @@ from rover_simulator.core import SensingPlanner
 from rover_simulator.utils.utils import set_angle_into_range, is_angle_in_range
 
 
+class NoSensingPlanner(SensingPlanner):
+    def decide(self, *args) -> bool:
+        return False
+
+
 class SimpleSensingPlanner(SensingPlanner):
     def __init__(
         self,
