@@ -102,7 +102,7 @@ class DwaRover(BasicRover):
         )
         self.v = 0.0
         self.w = 0.0
-        self.waypoint = waypoint_pos
+        self.waypoint: np.ndarray = waypoint_pos
 
     def one_step(self, time_interval: float) -> None:
         # Collision Check
@@ -115,14 +115,20 @@ class DwaRover(BasicRover):
             self.history.append(real_pose=self.real_pose, estimated_pose=self.estimated_pose, sensing_result=[], waypoints=self.waypoints)
             return
 
+        # Sensing Planning
+        sense_plan_flag = self.sensing_planner.decide(self.estimated_pose)
+
         # Sensing
-        sensing_result = self.sensor.sense(self) if self.sensor is not None else []
+        sensing_result = []
+        if sense_plan_flag:
+            sensing_result = self.sensor.sense(self) if self.sensor else []
+            self.mapper.update(self.estimated_pose, sensing_result) if self.mapper else None
 
         # Calculate Control Inputs
         v, w = self.controller.calculate_control_inputs(
             rover_pose=self.estimated_pose, dt=time_interval,
             goal_pose=self.waypoint, sensing_result=sensing_result,
-            v=self.v, w=self.w,
+            v=self.v, w=self.w, mapper=self.mapper
         )
         self.v, self.w = v, w
 
@@ -241,22 +247,23 @@ class OnlinePathPlanningRover(DwaRover):
             sensing_planner=sensing_planner, mapper=mapper, collision_detector=collision_detector,
             history=history, color=color, waypoint_color=waypoint_color, waypoint_pos=None
         )
-        self.path_planner.set_start(pose)
-        self.path_planner.set_goal(goal_pos)
-        self.path_planner.set_map(mapper) if hasattr(self.path_planner, 'set_map') else None
+        if path_planner is not None:
+            self.path_planner.set_start(pose)
+            self.path_planner.set_goal(goal_pos)
+            self.path_planner.set_map(mapper) if hasattr(self.path_planner, 'set_map') else None
         self.goal_pos = goal_pos
         self.waypoint_dist = waypoint_dist
 
     def one_step(self, time_interval: float) -> None:
         sensing_result = []
 
-        # Collision Detection
-        if self.collision_detector.detect_collision(self):
+        # Goal Check
+        if np.linalg.norm(self.goal_pos[0:2] - self.estimated_pose[0:2]) < 1.0:
             self.history.append(real_pose=self.real_pose, estimated_pose=self.estimated_pose, sensing_result=sensing_result, waypoints=self.waypoints)
             return
 
-        # Goal Check
-        if np.linalg.norm(self.goal_pos[0:2] - self.estimated_pose[0:2]) < 1.0:
+        # Collision Detection
+        if self.collision_detector.detect_collision(self):
             self.history.append(real_pose=self.real_pose, estimated_pose=self.estimated_pose, sensing_result=sensing_result, waypoints=self.waypoints)
             return
 

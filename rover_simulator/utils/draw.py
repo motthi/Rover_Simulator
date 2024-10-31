@@ -188,15 +188,15 @@ def draw_sensing_results(ax: Axes, poses, sensor_range, sensor_fov, sensing_resu
 
 
 def draw_history_pose(ax: Axes, elems: list, poses: list, rover_r: float, rover_color: str, step: int, start_step: int = 0) -> None:
-    xn, yn = poses[step][0:2] + rover_r * np.array([np.cos(poses[step][2]), np.sin(poses[step][2])])
-    elems += ax.plot([poses[step][0], xn], [poses[step][1], yn], color=rover_color)
+    xn, yn = poses[start_step + step][0:2] + rover_r * np.array([np.cos(poses[start_step + step][2]), np.sin(poses[start_step + step][2])])
+    elems += ax.plot([poses[start_step + step][0], xn], [poses[start_step + step][1], yn], color=rover_color)
     elems += ax.plot(
         [e[0] for e in poses[start_step:start_step + step + 1]],
         [e[1] for e in poses[start_step:start_step + step + 1]],
         linewidth=1.0,
         color=rover_color
     )
-    c = patches.Circle(xy=(poses[step][0], poses[step][1]), radius=rover_r, fill=False, color=rover_color)
+    c = patches.Circle(xy=(poses[start_step + step][0], poses[start_step + step][1]), radius=rover_r, fill=False, color=rover_color)
     elems.append(ax.add_patch(c))
 
 

@@ -6,6 +6,8 @@ import matplotlib.pyplot as plt
 from scipy.spatial import cKDTree
 from rover_simulator.core import *
 from rover_simulator.utils.draw import *
+from matplotlib.figure import Figure
+from matplotlib.axes import Axes
 
 if 'google.colab' in sys.modules:
     from tqdm.notebook import tqdm  # Google Colaboratory
@@ -18,6 +20,8 @@ else:
 class World():
     rovers: list[Rover]
     obstacles: list[Obstacle]
+    fig: Figure
+    ax: Axes
 
     def __init__(self, time_interval: float = 0.1) -> None:
         self.rovers = []
@@ -25,10 +29,11 @@ class World():
         self.step = 0
         self.time_interval = time_interval
         self.fig = None
+        self.ax = None
         self.ani = None
 
-    def simulate(self, steps: int = 100):
-        for _ in tqdm(range(steps)):
+    def simulate(self, steps: int = 100, tqdm_leave: bool = True, tqdm_desc="Simulation"):
+        for _ in tqdm(range(steps), desc=tqdm_desc, leave=tqdm_leave):
             self.one_step()
             self.step += 1
             """
@@ -96,21 +101,21 @@ class World():
     def set_start_goal_ramdomly(
         self,
         x_range: list[float] = [0, 20], y_range: list[float] = [0, 20],
-        min_distnace: float = 0.0, max_distance: float = 20,
-        enlarged_obstacle=0.0
+        min_dist: float = 0.0, max_dist: float = 20,
+        expand_dist=0.0
     ) -> list[np.ndarray]:
-        if min_distnace > max_distance:
+        if min_dist > max_dist:
             raise ValueError("min_distance must be lower than max_distance")
         distance = -1.0
         obstacle_kdTree = cKDTree([obstacle.pos for obstacle in self.obstacles])
         is_collision = True
-        while distance < min_distnace or distance > max_distance or is_collision:
+        while distance < min_dist or distance > max_dist or is_collision:
             start_pos = np.array([np.random.uniform(x_range[0], x_range[1]), np.random.uniform(y_range[0], y_range[1])])
             goal_pos = np.array([np.random.uniform(x_range[0], x_range[1]), np.random.uniform(y_range[0], y_range[1])])
             distance = np.linalg.norm(start_pos - goal_pos)
             dist_start, idx_start = obstacle_kdTree.query(start_pos, k=1)
             dist_goal, idx_goal = obstacle_kdTree.query(goal_pos, k=1)
-            if dist_start < self.obstacles[idx_start].r + enlarged_obstacle + 1.0 or dist_goal < self.obstacles[idx_goal].r + enlarged_obstacle + 1.0:
+            if dist_start < self.obstacles[idx_start].r + expand_dist + 1.0 or dist_goal < self.obstacles[idx_goal].r + expand_dist + 1.0:
                 is_collision = True
             else:
                 is_collision = False
@@ -136,21 +141,21 @@ class World():
         draw_sensing_area_flag: bool = True,
         not_show: bool = False
     ):
-        self.fig, ax = set_fig_params(figsize, xlim, ylim)
-        draw_obstacles(ax, self.obstacles, expand_dist, 1.0, expand_color)
+        self.fig, self.ax = set_fig_params(figsize, xlim, ylim)
+        draw_obstacles(self.ax, self.obstacles, expand_dist, 1.0, expand_color)
 
         for rover in self.rovers:
             if rover.history:
-                draw_poses(ax, rover.history.real_poses, rover.color)
-                draw_poses(ax, rover.history.estimated_poses, rover.color, linestyle=':')
+                draw_poses(self.ax, rover.history.real_poses, rover.color)
+                draw_poses(self.ax, rover.history.estimated_poses, rover.color, linestyle=':')
                 if draw_sensing_results_flag:
-                    draw_sensing_results(ax, rover.history.real_poses, rover.sensor.range, rover.sensor.fov, rover.sensing_results, draw_sensing_points_flag, draw_sensing_area_flag)
-            draw_rover(ax, rover.real_pose, rover.r, rover.color)
-            draw_waypoints(ax, rover.waypoints, rover.waypoint_color) if draw_waypoints_flag and rover.waypoints is not None else None
+                    draw_sensing_results(self.ax, rover.history.real_poses, rover.sensor.range, rover.sensor.fov, rover.sensing_results, draw_sensing_points_flag, draw_sensing_area_flag)
+            draw_rover(self.ax, rover.real_pose, rover.r, rover.color)
+            draw_waypoints(self.ax, rover.waypoints, rover.waypoint_color) if draw_waypoints_flag and rover.waypoints is not None else None
 
-        draw_start(ax, start_pos) if start_pos is not None else None
-        draw_goal(ax, goal_pos) if goal_pos is not None else None
-        ax.legend() if legend_flag is True else None
+        draw_start(self.ax, start_pos) if start_pos is not None else None
+        draw_goal(self.ax, goal_pos) if goal_pos is not None else None
+        self.ax.legend() if legend_flag is True else None
         plt.show() if not_show is False else None
 
     def animate(
@@ -202,7 +207,7 @@ class World():
             if rover.history:
                 draw_history_pose(ax, elems, rover.history.estimated_poses, rover.r, rover.color, i, start_step)
                 draw_history_pose(ax, elems, rover.history.real_poses, rover.r, rover.color, i, start_step)
-                draw_history_waypoints(ax, elems, rover.history.waypoints, rover.history.waypoints_colors, start_step + i) if draw_waypoints_flag and len(rover.history.waypoints) != 0 else None
+                draw_history_waypoints(ax, elems, rover.history.waypoints, start_step + i) if draw_waypoints_flag and len(rover.history.waypoints) != 0 else None
 
                 if rover.sensor and draw_sensing_results_flag:
                     rover.sensor.draw(ax, elems, rover.history.sensing_results[start_step + i], rover.history.real_poses[start_step + i])
