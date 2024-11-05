@@ -107,16 +107,23 @@ class World():
         if min_dist > max_dist:
             raise ValueError("min_distance must be lower than max_distance")
         distance = -1.0
-        obstacle_kdTree = cKDTree([obstacle.pos for obstacle in self.obstacles])
+
+        obstacle_kdTree = None
+        if len(self.obstacles) != 0:
+            obstacle_kdTree = cKDTree([obstacle.pos for obstacle in self.obstacles])
+
         is_collision = True
         while distance < min_dist or distance > max_dist or is_collision:
             start_pos = np.array([np.random.uniform(x_range[0], x_range[1]), np.random.uniform(y_range[0], y_range[1])])
             goal_pos = np.array([np.random.uniform(x_range[0], x_range[1]), np.random.uniform(y_range[0], y_range[1])])
             distance = np.linalg.norm(start_pos - goal_pos)
-            dist_start, idx_start = obstacle_kdTree.query(start_pos, k=1)
-            dist_goal, idx_goal = obstacle_kdTree.query(goal_pos, k=1)
-            if dist_start < self.obstacles[idx_start].r + expand_dist + 1.0 or dist_goal < self.obstacles[idx_goal].r + expand_dist + 1.0:
-                is_collision = True
+            if obstacle_kdTree:
+                dist_start, idx_start = obstacle_kdTree.query(start_pos, k=1)
+                dist_goal, idx_goal = obstacle_kdTree.query(goal_pos, k=1)
+                if dist_start < self.obstacles[idx_start].r + expand_dist + 1.0 or dist_goal < self.obstacles[idx_goal].r + expand_dist + 1.0:
+                    is_collision = True
+                else:
+                    is_collision = False
             else:
                 is_collision = False
         return start_pos, goal_pos
