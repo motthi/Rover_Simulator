@@ -348,42 +348,34 @@ class ArcPathController(Controller):
         mapper: GridMapper,
         *args, **kwargs
     ):
+        from tqdm import tqdm
         min_cost = float("inf")
         best_u = [0.0, 0.0]
+        rover_idx = mapper.poseToIndex(rover_pose)
+        if mapper.isOutOfBounds(rover_idx) or mapper.map[rover_idx[0], rover_idx[1]] > 0.5:
+            mapper.map[rover_idx[0], rover_idx[1]] = 0.1
 
-        # List up Trajectroy
         traj_list = transform_traj_list(self.path_primitives, rover_pose)
-        # print(rover_pose)
-        # fig, ax = plt.subplots()
-        # for traj in traj_list:
-        #     ax.plot(traj[:, 0], traj[:, 1], alpha=0.5, color='black')
-        # ax.set_aspect('equal')
-        # plt.show()
-
-        # angle to the goal
         angle_to_goal = np.arctan2(goal_pose[1] - rover_pose[1], goal_pose[0] - rover_pose[0]) - rover_pose[2]
-        while angle_to_goal > np.pi:
-            angle_to_goal -= 2 * np.pi
-        while angle_to_goal < - np.pi:
-            angle_to_goal += 2 * np.pi
+        angle_to_goal = set_angle_into_range(angle_to_goal)
 
-        if self.is_prev_rot and angle_to_goal > np.pi / 4:
-            best_u[1] = self.w_max
-        elif self.is_prev_rot and angle_to_goal < -np.pi / 4:
-            best_u[1] = self.w_min
-        elif angle_to_goal > 2 * np.pi / 3:
-            best_u[1] = self.w_max
-            self.is_prev_rot = True
-        elif angle_to_goal < -2 * np.pi / 3:
-            best_u[1] = self.w_min
-            self.is_prev_rot = True
-        else:
+        # if self.is_prev_rot and angle_to_goal > np.pi / 4:
+        #     best_u[1] = self.w_max
+        # elif self.is_prev_rot and angle_to_goal < -np.pi / 4:
+        #     best_u[1] = self.w_min
+        # elif angle_to_goal > 3 * np.pi / 4:
+        #     best_u[1] = self.w_max
+        #     self.is_prev_rot = True
+        # elif angle_to_goal < -3 * np.pi / 4:
+        #     best_u[1] = self.w_min
+        #     self.is_prev_rot = True
+        if True:
             self.is_prev_rot = False
             for traj in traj_list:
                 is_collision = False
-                for [x, y, th, _, _] in traj:
+                for [x, y, _, _, _] in traj:
                     # Collision Check
-                    idx = mapper.poseToIndex(np.array([x, y, th]))
+                    idx = mapper.poseToIndex(np.array([x, y]))
                     if mapper.isOutOfBounds(idx) or mapper.map[idx[0], idx[1]] > 0.5:
                         is_collision = True
                         break
@@ -391,11 +383,13 @@ class ArcPathController(Controller):
                 if is_collision:
                     continue
 
-                speed_cost = self.speed_gain * (self.v_max - traj[-1, 3])
+                rw_cost = 5 * np.abs(traj[0, 4]) if traj[0, 3] < 1e-3 else 0.0  # it is better to select the path which does not excute rotation at first.
+
+                # speed_cost = self.speed_gain * (self.v_max - traj[-1, 3])
                 # ob_cost = self.obs_cost_gain * self.calc_obstacle_cost(trajectory, obstacle_list)
                 to_goal_cost = self.to_goal_cost_gain * self.calc_dist_to_goal_cost(traj, goal_pose)
                 # final_cost = to_goal_cost + speed_cost + ob_cost
-                final_cost = to_goal_cost + speed_cost
+                final_cost = to_goal_cost + rw_cost  # + speed_cost
 
                 # search minimum trajectory
                 if min_cost >= final_cost:
@@ -409,20 +403,25 @@ class ArcPathController(Controller):
                     # best_u[1] = self.w_min
 
             if best_u[0] < self.stuck_flag_cons and best_u[1] < self.stuck_flag_cons:
+                idx = mapper.poseToIndex(rover_pose)
+                mapper.isOutOfBounds(idx)
+                # tqdm.write(f"No path found\t{mapper.map[idx[0], idx[1]] > 0.5}")
                 if angle_to_goal >= 0:
-                    best_u[1] = self.w_stuck
+                    best_u[1] = self.w_max
                 elif angle_to_goal < 0:
-                    best_u[1] = -self.w_stuck
-            # if best_u[0] < self.stuck_flag_cons:
-            #     self.stuck_cnt += 1
-            #     if self.stuck_cnt > self.stuck_cnt_max:
-            #         self.stuck_flag = True
-            # else:
-            #     self.stuck_cnt = 0
-            #     self.stuck_flag = False
+                    best_u[1] = self.w_min
 
-            # from tqdm import tqdm
-            # tqdm.write(f"{best_u=}    \t{np.rad2deg(angle_to_goal)=}")
+        if best_u[0] < self.stuck_flag_cons:
+            self.stuck_cnt += 1
+            if self.stuck_cnt > self.stuck_cnt_max:
+                self.stuck_flag = True
+        else:
+            self.stuck_cnt = 0
+            self.stuck_flag = False
+
+        # tqdm.write(f"{self.stuck_cnt}, {self.stuck_cnt_max}")
+        # dist_to_goal = np.linalg.norm(rover_pose[:2] - goal_pose[:2])
+        # tqdm.write(f"{best_u=}    \t{np.rad2deg(angle_to_goal)=}")
         return best_u
 
     def calc_dist_to_goal_cost(self, trajectory, goal):
@@ -477,6 +476,10 @@ class ArcPathController(Controller):
     def generate_path_primitives(self, dt):
         def w_lists(depth, max_depth, dt):
             w_values = np.linspace(self.w_min, self.w_max, self.branch_num)
+            scaled_space = np.sign(w_values) * np.abs(w_values)**2
+            scaled_space = (scaled_space - scaled_space.min()) / (scaled_space.max() - scaled_space.min())
+            w_values = scaled_space * (self.w_max - self.w_min) + self.w_min
+
             if depth == max_depth:
                 return [[]]
 
@@ -499,7 +502,7 @@ class ArcPathController(Controller):
                     v_ = v
                     w = w_sequence[depth]
                     if v < 1e-3 and depth > 0:
-                        v_ = self.v_max
+                        v_ = self.v_max / 2
                     new_pose = current_pose
                     for i in range(int(self.branch_dt / dt)):
                         pose = state_transition(new_pose[:3], v_, w, dt)
