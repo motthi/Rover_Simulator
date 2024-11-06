@@ -254,12 +254,12 @@ class DwaController(Controller):
 class PathFollower(DwaController):
     def __init__(
         self,
-        nu_range: list[float] = [-1.0, 2.0],
-        omega_range: list[float] = [-120 * np.pi / 180, 120 * np.pi / 180],
-        nu_delta: float = 0.1,
-        omega_delta: float = 30 * np.pi / 180,
-        nu_max_acc: float = 0.3,
-        omega_max_acc: float = 60 * np.pi / 180,
+        v_range: list[float] = [-1.0, 2.0],
+        w_range: list[float] = [-120 * np.pi / 180, 120 * np.pi / 180],
+        v_delta: float = 0.1,
+        w_delta: float = 30 * np.pi / 180,
+        v_max_acc: float = 0.3,
+        w_max_acc: float = 60 * np.pi / 180,
         to_goal_cost_gain: float = 0.15,
         speed_gain: float = 1.0,
         obs_cost_gain: float = 2.0,
@@ -268,9 +268,9 @@ class PathFollower(DwaController):
         rover_stuck_flag_cons: float = 0.001,
     ) -> None:
         super().__init__(
-            nu_range=nu_range, omega_range=omega_range,
-            nu_delta=nu_delta, omega_delta=omega_delta,
-            nu_max_acc=nu_max_acc, omega_max_acc=omega_max_acc,
+            nu_range=v_range, omega_range=w_range,
+            nu_delta=v_delta, omega_delta=w_delta,
+            nu_max_acc=v_max_acc, omega_max_acc=w_max_acc,
             to_goal_cost_gain=to_goal_cost_gain, speed_gain=speed_gain, obs_cost_gain=obs_cost_gain,
             predict_time=predict_time, rover_r=rover_r,
             rover_stuck_flag_cons=rover_stuck_flag_cons
@@ -285,10 +285,7 @@ class PathFollower(DwaController):
         *args, **kwargs
     ):
         angle_to_goal = np.arctan2(goal_pose[1] - rover_pose[1], goal_pose[0] - rover_pose[0]) - rover_pose[2]
-        while angle_to_goal > np.pi:
-            angle_to_goal -= 2 * np.pi
-        while angle_to_goal < - np.pi:
-            angle_to_goal += 2 * np.pi
+        angle_to_goal = set_angle_into_range(angle_to_goal)
         if angle_to_goal > np.pi / 4:
             return 0.0, self.omega_max
         elif angle_to_goal < -np.pi / 4:
