@@ -115,8 +115,13 @@ class World():
         is_collision = True
         while distance < min_dist or distance > max_dist or is_collision:
             start_pos = np.array([np.random.uniform(x_range[0], x_range[1]), np.random.uniform(y_range[0], y_range[1])])
-            goal_pos = np.array([np.random.uniform(x_range[0], x_range[1]), np.random.uniform(y_range[0], y_range[1])])
-            distance = np.linalg.norm(start_pos - goal_pos)
+            angle = np.random.uniform(0, 2 * np.pi)
+            distance = np.random.uniform(min_dist, max_dist)
+            goal_pos = start_pos + np.array([distance * np.cos(angle), distance * np.sin(angle)])
+
+            if not (x_range[0] <= goal_pos[0] <= x_range[1] and y_range[0] <= goal_pos[1] <= y_range[1]):
+                continue
+
             if obstacle_kdTree:
                 dist_start, idx_start = obstacle_kdTree.query(start_pos, k=1)
                 dist_goal, idx_goal = obstacle_kdTree.query(goal_pos, k=1)
@@ -126,6 +131,7 @@ class World():
                     is_collision = False
             else:
                 is_collision = False
+
         return start_pos, goal_pos
 
     def reset(self, reset_step: bool = True, reset_rovers: bool = True, reset_obstacles: bool = True):

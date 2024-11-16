@@ -82,7 +82,7 @@ class GridMapper(Mapper):
                         continue
                     self.sensing_grid_candidates.append([i, j])
 
-            sensing_range = (self.sensor.range + expand_dist) / self.grid_width
+            sensing_range = (self.sensor.range + 1.5 * expand_dist) / self.grid_width
             for i in range(np.ceil(-sensing_range).astype(np.int32), np.floor(sensing_range).astype(np.int32) + 1):
                 for j in range(np.ceil(-sensing_range).astype(np.int32), np.floor(sensing_range).astype(np.int32) + 1):
                     if np.sqrt(i**2 + j**2) > sensing_range + 1e-5:
