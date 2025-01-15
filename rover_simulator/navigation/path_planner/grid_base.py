@@ -1,5 +1,4 @@
 import copy
-import heapq
 import cv2
 import math
 import numpy as np
@@ -18,7 +17,8 @@ class GridBasePathPlanning(PathPlanner):
     grid_width: float
 
     def __init__(self) -> None:
-        pass
+        self.fig = None
+        self.ax = None
 
     def set_start(self, start_pos: np.ndarray):
         self.start_idx = self.pose2index(start_pos[0:2])
@@ -337,6 +337,7 @@ class DstarLite(GridBasePathPlanning):
         mapper: GridMapper = None, map_grid_width: float = 1.0,
         heuristics: float = 0.5,
     ):
+        super().__init__()
         self.grid_width = map_grid_width
         self.start_idx = self.pose2index(start_pos) if start_pos is not None else None
         self.current_idx = self.start_idx if start_pos is not None else None
@@ -534,6 +535,7 @@ class DstarLite(GridBasePathPlanning):
                     last_cost = self.g(s_)
                     next_idx = s_
             idx = next_idx
+
         # while not self.isGoal(idx):
         for i in range(200):
             if self.is_goal(idx):
@@ -577,7 +579,7 @@ class DstarLite(GridBasePathPlanning):
         draw_map: bool = True,
         draw_contour: bool = True
     ):
-        self.fig, ax = set_fig_params(figsize, xlim, ylim)
+        self.fig, self.ax = set_fig_params(figsize, xlim, ylim)
 
         if map_name == 'cost':
             map = self.g_map
@@ -587,7 +589,7 @@ class DstarLite(GridBasePathPlanning):
             map = self.local_grid_map
 
         # Draw Obstacles
-        draw_obstacles(ax, obstacles, expand_dist)
+        draw_obstacles(self.ax, obstacles, expand_dist)
 
         # Draw Map
         if map_name == 'cost':
@@ -609,11 +611,11 @@ class DstarLite(GridBasePathPlanning):
         )
 
         if draw_map:
-            draw_grid_map(ax, map, cmap, vmin, vmax, 0.5, extent, 1.0)
+            draw_grid_map(self.ax, map, cmap, vmin, vmax, 0.5, extent, 1.0)
         if draw_contour:
-            draw_grid_map_contour(ax, map, self.grid_num, self.grid_width, 30)
-        draw_start(ax, self.index2pose(self.start_idx))
-        draw_goal(ax, self.index2pose(self.goal_idx))
+            draw_grid_map_contour(self.ax, map, self.grid_num, self.grid_width, 30)
+        draw_start(self.ax, self.index2pose(self.start_idx))
+        draw_goal(self.ax, self.index2pose(self.goal_idx))
         plt.show()
 
     def compute_shortest_path(self, index):

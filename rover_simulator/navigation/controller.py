@@ -356,6 +356,8 @@ class ArcPathController(Controller):
         angle_to_goal = np.arctan2(goal_pose[1] - rover_pose[1], goal_pose[0] - rover_pose[0]) - rover_pose[2]
         angle_to_goal = set_angle_into_range(angle_to_goal)
 
+        curr_dist_to_wpt = np.linalg.norm(rover_pose[:2] - goal_pose[:2])
+
         # if self.is_prev_rot and angle_to_goal > np.pi / 4:
         #     best_u[1] = self.w_max
         # elif self.is_prev_rot and angle_to_goal < -np.pi / 4:
@@ -376,6 +378,10 @@ class ArcPathController(Controller):
                     if mapper.isOutOfBounds(idx) or mapper.map[idx[0], idx[1]] > 0.5:
                         is_collision = True
                         break
+
+                dist_to_wpt = np.linalg.norm(traj[-1, :2] - goal_pose[:2])
+                if curr_dist_to_wpt < dist_to_wpt:
+                    continue
 
                 if is_collision:
                     continue
@@ -403,10 +409,11 @@ class ArcPathController(Controller):
                 idx = mapper.poseToIndex(rover_pose)
                 mapper.isOutOfBounds(idx)
                 # tqdm.write(f"No path found\t{mapper.map[idx[0], idx[1]] > 0.5}")
-                if angle_to_goal >= 0:
-                    best_u[1] = self.w_max
-                elif angle_to_goal < 0:
-                    best_u[1] = self.w_min
+                best_u[1] = self.w_max
+                # if angle_to_goal >= 0:
+                #     best_u[1] = self.w_max
+                # elif angle_to_goal < 0:
+                #     best_u[1] = self.w_min
 
         if best_u[0] < self.stuck_flag_cons:
             self.stuck_cnt += 1
@@ -460,7 +467,7 @@ class ArcPathController(Controller):
         min_r = np.min(r)
         return 1.0 / min_r  # OK
 
-    def draw_path_primitives(self, dt: float) -> None:
+    def draw_path_primitives(self, dt: float, src: str = None) -> None:
         traj_list = self.generate_path_primitives(dt)
         traj_list = transform_traj_list(traj_list, np.array([0, 0, np.pi / 2]))
 
@@ -468,7 +475,14 @@ class ArcPathController(Controller):
         for traj in traj_list:
             ax.plot(traj[:, 0], traj[:, 1])
         ax.set_aspect('equal')
-        plt.show()
+        ax.set_xlabel('X [m]')
+        ax.set_ylabel('Y [m]')
+        if src:
+            fig.tight_layout()
+            fig.savefig(src, dpi=300, bbox_inches='tight', pad_inches=0.05)
+            plt.close()
+        else:
+            plt.show()
 
     def generate_path_primitives(self, dt):
         def w_lists(depth, max_depth, dt):

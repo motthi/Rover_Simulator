@@ -75,11 +75,11 @@ def draw_obstacles(ax: Axes, obstacles: list[Obstacle], expand_dist: float = 0.0
 
 
 def draw_start(ax: Axes, start_pos: np.ndarray) -> None:
-    ax.plot(start_pos[0], start_pos[1], "or", label="start")
+    ax.plot(start_pos[0], start_pos[1], "or", label="Start")
 
 
 def draw_goal(ax: Axes, goal_pos: np.ndarray) -> None:
-    ax.plot(goal_pos[0], goal_pos[1], "xr", label="goal")
+    ax.plot(goal_pos[0], goal_pos[1], "xr", label="Goal")
 
 
 def draw_pose(ax: Axes, pose: np.ndarray, color: str = "black", alpha: float = 1.0) -> None:
