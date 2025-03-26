@@ -40,6 +40,13 @@ class SimpleHistory(History):
         self.rover_color = rover_color
         self.waypoint_color = waypoint_color
 
+    def reset(self) -> None:
+        self.steps = []
+        self.real_poses = []
+        self.estimated_poses = []
+        self.sensing_results = []
+        self.waypoints = []
+
     def append(self, *args, **kwargs) -> None:
         self.steps.append(len(self.steps))
         self.real_poses.append(kwargs['real_pose'])

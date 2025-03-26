@@ -164,6 +164,7 @@ class ImaginalLiDAR(Sensor):
         self.fov = fov
         self.d_ang = d_ang
         self.smp_ang = np.arange(-self.fov / 2, self.fov / 2, d_ang)
+        self.smp_num = len(self.smp_ang)
         self.obstacles: list[Obstacle] = obstacles
         self.type = 'lidar'
 
