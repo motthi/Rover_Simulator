@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from matplotlib.axes import Axes
 from scipy.spatial import cKDTree
-from rover_simulator.core import Obstacle, PathPlanner
+from rover_simulator.core import Obstacle, PathPlanner, Mapper
 from rover_simulator.utils.utils import set_angle_into_range
 from rover_simulator.utils.cmotion.cmotion import state_transition, covariance_transition, prob_collision
 from rover_simulator.utils.draw import set_fig_params, draw_obstacles, draw_start, draw_goal, sigma_ellipse
@@ -81,6 +81,9 @@ class RRT(PathPlanner):
 
     def set_goal(self, goal_pos):
         self.goal_node = self.Node(goal_pos[0], goal_pos[1])
+
+    def set_map(self, mapper: Mapper = None):
+        return None
 
     def calculate_path(self, max_iter=200, *kargs):
         self.planned_path = []
@@ -1018,13 +1021,17 @@ class ChanceConstrainedRRT(RRT):
 
     def is_safe(self, x: np.ndarray, cov: np.ndarray) -> bool:
         for obs in self.obstacle_list:
-            if math.hypot(x[0] - obs[0], x[1] - obs[1]) > 5.0:
-                continue
-            obs_pos = obs[0:2]
-            obs_r = obs[2]
-            prob_col = prob_collision(x, cov, obs_pos, obs_r)
-            if prob_col > 1 - self.p_safe:
-                return False
+            if obs.type == 'circular':
+                if math.hypot(x[0] - obs.pos[0], x[1] - obs.pos[1]) > 5.0:
+                    continue
+                obs_pos = obs.pos[0:2]
+                obs_r = obs.r
+                prob_col = prob_collision(x, cov, obs_pos, obs_r)
+                if prob_col > 1 - self.p_safe:
+                    return False
+            elif obs.type == 'rectangular':
+                # @todo
+                pass
         return True
 
     def to_pose(self, n: Node):
