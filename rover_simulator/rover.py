@@ -116,7 +116,7 @@ class DwaRover(BasicRover):
             return
 
         # Sensing Planning
-        sense_plan_flag = self.sensing_planner.decide(self.estimated_pose)
+        sense_plan_flag = self.sensing_planner.decide(self.estimated_pose) if self.sensing_planner else True
 
         # Sensing
         sensing_result = []

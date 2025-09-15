@@ -181,15 +181,31 @@ class RectangularObstacle(Obstacle):
     def check_collision_point(self, xy: np.ndarray, expand_dist: float = 0.0) -> bool:
         cos_th = np.cos(-np.deg2rad(self.angle))
         sin_th = np.sin(-np.deg2rad(self.angle))
-        xy = xy - self.xy
-        xy = np.array([[cos_th, -sin_th], [sin_th, cos_th]]) @ xy
-        if 0 <= xy[0] <= self.w and 0 <= xy[1] <= self.h:
+        xy_local = xy - self.xy
+        xy_local = np.array([[cos_th, -sin_th], [sin_th, cos_th]]) @ xy_local
+        
+        # Inside the obstacle
+        if 0 <= xy_local[0] <= self.w and 0 <= xy_local[1] <= self.h:
             return True
 
-        if -expand_dist <= xy[0] <= self.w + expand_dist and -expand_dist <= xy[1] <= self.h + expand_dist:
-            for corner in self.corner_points:
-                if np.linalg.norm(xy - corner) <= expand_dist:
-                    return True
+        # Corner
+        corner_points = [
+            np.array([0, 0]),
+            np.array([self.w, 0]),
+            np.array([self.w, self.h]),
+            np.array([0, self.h])
+        ]
+        for corner in corner_points:
+            if np.linalg.norm(xy_local - corner) < expand_dist:
+                return True
+
+        # Long side
+        if 0 <= xy_local[0] <= self.w and (-expand_dist <= xy_local[1] < 0 or self.h < xy_local[1] <= self.h + expand_dist):
+            return True
+        # Short side
+        if 0 <= xy_local[1] <= self.h and (-expand_dist <= xy_local[0] < 0 or self.w < xy_local[0] <= self.w + expand_dist):
+            return True
+
         return False
 
     def check_collision_line(self, xy1: np.ndarray, xy2: np.ndarray, expand_dist: float = 0.0) -> bool:
@@ -266,6 +282,7 @@ class RectangularObstacle(Obstacle):
         )
         trans = transforms.Affine2D().rotate_deg_around(self.xy[0], self.xy[1], self.angle) + ax.transData
         enl_obs.set_transform(trans)
+        ax.add_patch(enl_obs)
 
 
 class BaseCollisionDetector:

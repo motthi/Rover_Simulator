@@ -89,7 +89,8 @@ class DwaController(Controller):
         rover_pose: np.ndarray,
         v: float, w: float, dt: float,
         goal_pose: np.ndarray,
-        sensing_result: np.ndarray  # @todo Only for the sensor? No compatibility with map?
+        sensing_result: np.ndarray,  # @todo Only for the sensor? No compatibility with map?
+        *args, **kwargs
     ):
         if len(sensing_result) != 0:
             if self.sensor_type == 'stereo_camera':
