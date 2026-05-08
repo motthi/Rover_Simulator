@@ -370,7 +370,7 @@ class DstarLite(GridBasePathPlanning):
             self.metric_grid_map = np.full(self.grid_cost_num, -1.0, dtype=np.float)  # Metric Map shows wheter the grid is observed, -1: Unobserved, 0: Free, 1: Obstacles
             self.is_in_U_map = np.full(mapper.map.shape, 0, dtype=np.int16)
 
-        self.U = []
+        self.U_heap = []
         self.km = 0.0
 
         self.pathToTake = []
@@ -398,7 +398,16 @@ class DstarLite(GridBasePathPlanning):
         self.local_grid_map[self.start_idx[0]][self.start_idx[1]] = 0.0
         self.rhs_map[self.goal_idx[0]][self.goal_idx[1]] = 0
 
-        self.U = []
+        # prepare inverse id map, key map and heap for U
+        total = int(self.grid_num[0] * self.grid_num[1])
+        self.id_map = np.full(self.grid_num, 0, dtype=np.int32)
+        self.id_to_idx = np.zeros((total, 2), dtype=np.int32)
+        self.key_map = np.full(np.append(np.array(self.grid_num), 2), float('inf'))
+        self.U_heap = []
+        for cnt, (u, _) in enumerate(np.ndenumerate(self.local_grid_map)):
+            self.id_map[u[0]][u[1]] = cnt
+            self.id_to_idx[cnt, 0] = u[0]
+            self.id_to_idx[cnt, 1] = u[1]
         self.__u_append(self.goal_idx, [self.__h(self.start_idx, self.goal_idx), 0])
         self.previous_idx = np.array(self.start_idx)
 
@@ -423,7 +432,15 @@ class DstarLite(GridBasePathPlanning):
         self.rhs_map[self.goal_idx[0]][self.goal_idx[1]] = 0
 
         self.km = 0.0
-        self.U = []
+        total = int(self.grid_num[0] * self.grid_num[1])
+        self.id_map = np.full(self.grid_num, 0, dtype=np.int32)
+        self.id_to_idx = np.zeros((total, 2), dtype=np.int32)
+        self.key_map = np.full(np.append(np.array(self.grid_num), 2), float('inf'))
+        self.U_heap = []
+        for cnt, (u, _) in enumerate(np.ndenumerate(self.local_grid_map)):
+            self.id_map[u[0]][u[1]] = cnt
+            self.id_to_idx[cnt, 0] = u[0]
+            self.id_to_idx[cnt, 1] = u[1]
         self.__u_append(self.goal_idx, [self.__h(self.start_idx, self.goal_idx), 0])
 
         self.pathToTake = []
@@ -640,12 +657,22 @@ class DstarLite(GridBasePathPlanning):
         plt.show()
 
     def compute_shortest_path(self, index):
-        U_row = [row[1] for row in self.U]
-        if len(U_row) == 0:
+        # helper: pop top valid U entry
+        def pop_top_U():
+            while self.U_heap:
+                k1, k2, uid = heapq.heappop(self.U_heap)
+                ux = int(self.id_to_idx[uid, 0])
+                uy = int(self.id_to_idx[uid, 1])
+                if self.is_in_U_map[ux][uy] == 1:
+                    key = self.key_map[ux][uy]
+                    if math.isclose(key[0], k1) and math.isclose(key[1], k2):
+                        return np.array([ux, uy]), [k1, k2]
+                # stale entry -> continue
+            return None, None
+
+        u, k_old = pop_top_U()
+        if u is None:
             return
-        u_data = min(U_row)
-        idx = U_row.index(u_data)
-        u, k_old = np.array(self.U[idx][0]), self.U[idx][1]
         k_new = self.__calculate_key(u)
         g_u = self.g(u)
         rhs_u = self.rhs(u)
@@ -669,12 +696,9 @@ class DstarLite(GridBasePathPlanning):
                             self.rhs_map[s[0]][s[1]] = self.__get_min_rhs(s)
                     self.update_vertex(s)
 
-            U_row = [row[1] for row in self.U]
-            if len(U_row) == 0:
+            u, k_old = pop_top_U()
+            if u is None:
                 break
-            u_data = min(U_row)
-            idx = U_row.index(u_data)
-            u, k_old = np.array(self.U[idx][0]), self.U[idx][1]
             k_new = self.__calculate_key(u)
             g_u = self.g(u)
             rhs_u = self.rhs(u)
@@ -708,19 +732,27 @@ class DstarLite(GridBasePathPlanning):
             self.__u_remove(u)
 
     def __u_append(self, u, u_num):
-        self.U.append([list(u), u_num])
+        # push (k1, k2, uid) into heap; store key in key_map and mark presence
+        uid = int(self.id_map[u[0]][u[1]])
+        k1, k2 = float(u_num[0]), float(u_num[1])
+        heapq.heappush(self.U_heap, (k1, k2, uid))
+        self.key_map[u[0]][u[1]][0] = k1
+        self.key_map[u[0]][u[1]][1] = k2
         self.is_in_U_map[u[0]][u[1]] = 1
 
     def __u_remove(self, u):
-        U_row = [row[0] for row in self.U]
-        idx = U_row.index(list(u))
-        self.U.remove([list(u), self.U[idx][1]])
+        # lazy removal: mark as not in U and invalidate key_map
         self.is_in_U_map[u[0]][u[1]] = 0
+        self.key_map[u[0]][u[1]][0] = float('inf')
+        self.key_map[u[0]][u[1]][1] = float('inf')
 
     def __u_update(self, u, u_num_new):
-        U_row = [row[0] for row in self.U]
-        idx = U_row.index(list(u))
-        self.U[idx][1] = u_num_new
+        # update: push new key into heap and update key_map
+        uid = int(self.id_map[u[0]][u[1]])
+        k1, k2 = float(u_num_new[0]), float(u_num_new[1])
+        heapq.heappush(self.U_heap, (k1, k2, uid))
+        self.key_map[u[0]][u[1]][0] = k1
+        self.key_map[u[0]][u[1]][1] = k2
         self.is_in_U_map[u[0]][u[1]] = 1
 
     def __get_min_rhs(self, u):
