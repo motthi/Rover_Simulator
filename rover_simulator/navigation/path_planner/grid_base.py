@@ -1,6 +1,7 @@
 import copy
 import cv2
 import math
+import heapq
 import numpy as np
 import matplotlib.pyplot as plt
 from rover_simulator.core import Mapper, PathPlanner, Obstacle
@@ -101,7 +102,13 @@ class Dijkstra(GridBasePathPlanning):
         self.is_opened_map = np.full(np.append(np.array(map.shape), 3), 0.0) if map is not None else None
         self.is_closed_map = np.full(np.append(np.array(map.shape), 3), 0.0) if map is not None else None
 
-        self.open_list = []
+        self.open_heap = []
+        # inverse mapping: id -> (x,y) for O(1) lookup
+        if map is not None:
+            total = int(self.grid_num[0] * self.grid_num[1])
+            self.id_to_idx = np.zeros((total, 2), dtype=np.int32)
+        else:
+            self.id_to_idx = None
         self.resultPath = []
         self.takenPath = []
 
@@ -110,8 +117,11 @@ class Dijkstra(GridBasePathPlanning):
         if map is not None:
             for cnt, (u, _) in enumerate(np.ndenumerate(self.cost_map)):
                 self.id_map[u[0]][u[1]] = cnt
+                if self.id_to_idx is not None:
+                    self.id_to_idx[cnt, 0] = u[0]
+                    self.id_to_idx[cnt, 1] = u[1]
                 if self.is_start(u):
-                    self.open_list.append([cnt, 0, 0])
+                    heapq.heappush(self.open_heap, (0.0, cnt, 0.0))
                     self.is_opened_map[u[0]][u[1]][0] = 1.0
                     self.is_opened_map[u[0]][u[1]][1] = 0.0
                     self.is_opened_map[u[0]][u[1]][2] = 0.0
@@ -126,10 +136,15 @@ class Dijkstra(GridBasePathPlanning):
         self.parent_id_map = np.full(self.grid_num, 0, dtype=np.int32)
         self.is_opened_map = np.full(np.append(np.array(mapper.map.shape), 3), 0.0)
         self.is_closed_map = np.full(np.append(np.array(mapper.map.shape), 3), 0.0)
+        # prepare inverse id->index map and initial open heap
+        total = int(self.grid_num[0] * self.grid_num[1])
+        self.id_to_idx = np.zeros((total, 2), dtype=np.int32)
         for cnt, (u, _) in enumerate(np.ndenumerate(self.cost_map)):
             self.id_map[u[0]][u[1]] = cnt
+            self.id_to_idx[cnt, 0] = u[0]
+            self.id_to_idx[cnt, 1] = u[1]
             if self.is_start(u):
-                self.open_list.append([cnt, 0, 0])
+                heapq.heappush(self.open_heap, (0.0, cnt, 0.0))
                 self.is_opened_map[u[0]][u[1]][0] = 1.0
                 self.is_opened_map[u[0]][u[1]][1] = 0.0
                 self.is_opened_map[u[0]][u[1]][2] = 0.0
@@ -152,14 +167,20 @@ class Dijkstra(GridBasePathPlanning):
         return np.array(waypoints)
 
     def expand_grid(self):
-        if len(self.open_list) == 0:
+        # Pop from heap until we find a non-stale opened entry
+        if len(self.open_heap) == 0:
             raise PathNotFoundError("Path was not found")
-        val = np.argmin(self.open_list, axis=0)  # 評価マップの中から最も小さいもの抽出
-        grid_id, cost_f, cost_g = self.open_list[val[1]]
-        idx = np.array([np.where(self.id_map == grid_id)[0][0], np.where(self.id_map == grid_id)[1][0]])
+        while True:
+            if not self.open_heap:
+                raise PathNotFoundError("Path was not found")
+            cost_f, grid_id, cost_g = heapq.heappop(self.open_heap)
+            idx = np.array([self.id_to_idx[grid_id, 0], self.id_to_idx[grid_id, 1]])
+            # check if this entry is still the current opened entry
+            if self.is_opened_map[idx[0]][idx[1]][0] == 1.0 and math.isclose(self.is_opened_map[idx[0]][idx[1]][1], cost_f):
+                break
+            # otherwise stale entry, continue
 
-        # Remove from Opened List
-        self.open_list.remove([grid_id, cost_f, cost_g])
+        # Mark as removed from opened
         self.is_opened_map[idx[0]][idx[1]][0] = 0.0
         self.is_opened_map[idx[0]][idx[1]][1] = 0.0
         self.is_opened_map[idx[0]][idx[1]][2] = 0.0
@@ -177,9 +198,9 @@ class Dijkstra(GridBasePathPlanning):
             evaluation_f = cost_g + self.c(neigbor_idx, idx)
             if self.is_opened(neigbor_idx):
                 neigbor_cost_f = self.is_opened_map[neigbor_idx[0]][neigbor_idx[1]][1]
-                neigbor_cost_g = self.is_opened_map[neigbor_idx[0]][neigbor_idx[1]][2]
+                # neigbor_cost_g = self.is_opened_map[neigbor_idx[0]][neigbor_idx[1]][2]
                 if neigbor_cost_f > evaluation_f:
-                    self.open_list.remove([self.id(neigbor_idx), neigbor_cost_f, neigbor_cost_g])
+                    # mark existing opened entry as stale (lazy deletion)
                     self.is_opened_map[neigbor_idx[0]][neigbor_idx[1]][0] = 0.0
                     self.is_opened_map[neigbor_idx[0]][neigbor_idx[1]][1] = 0.0
                     self.is_opened_map[neigbor_idx[0]][neigbor_idx[1]][2] = 0.0
@@ -187,7 +208,7 @@ class Dijkstra(GridBasePathPlanning):
                     continue
             elif self.is_closed(neigbor_idx):
                 neigbor_cost_f = self.is_closed_map[neigbor_idx[0]][neigbor_idx[1]][1]
-                neigbor_cost_g = self.is_closed_map[neigbor_idx[0]][neigbor_idx[1]][2]
+                # neigbor_cost_g = self.is_closed_map[neigbor_idx[0]][neigbor_idx[1]][2]
                 if neigbor_cost_f > evaluation_f:
                     self.is_closed_map[neigbor_idx[0]][neigbor_idx[1]][0] = 0.0
                     self.is_closed_map[neigbor_idx[0]][neigbor_idx[1]][1] = 0.0
@@ -195,7 +216,7 @@ class Dijkstra(GridBasePathPlanning):
                 else:
                     continue
             self.parent_id_map[neigbor_idx[0]][neigbor_idx[1]] = self.id(idx)
-            self.open_list.append([self.id(neigbor_idx), evaluation_f, evaluation_f])
+            heapq.heappush(self.open_heap, (evaluation_f, self.id(neigbor_idx), evaluation_f))
             self.is_opened_map[neigbor_idx[0]][neigbor_idx[1]][0] = 1.0
             self.is_opened_map[neigbor_idx[0]][neigbor_idx[1]][1] = evaluation_f
             self.is_opened_map[neigbor_idx[0]][neigbor_idx[1]][2] = evaluation_f
@@ -204,9 +225,9 @@ class Dijkstra(GridBasePathPlanning):
         parent_id = self.b(self.goal_idx)
         path = []
         while parent_id != self.id(self.start_idx):
-            parent = np.where(self.id_map == parent_id)
-            path.append(np.array([parent[0][0], parent[1][0]]))
-            parent_id = self.b(parent)
+            parent_idx = np.array([self.id_to_idx[parent_id, 0], self.id_to_idx[parent_id, 1]])
+            path.append(parent_idx)
+            parent_id = self.b(parent_idx)
         path.append(self.start_idx)
         return path
 
@@ -300,10 +321,10 @@ class Astar(Dijkstra):
             evaluation_f = cost_g + self.c(neigbor_idx, idx) + self.__h(neigbor_idx)  # 評価を計算
             if self.is_opened(neigbor_idx):  # オープンリストに含まれているか
                 neigbor_cost_f = self.is_opened_map[neigbor_idx[0]][neigbor_idx[1]][1]
-                neigbor_cost_g = self.is_opened_map[neigbor_idx[0]][neigbor_idx[1]][2]
+                # neigbor_cost_g = self.is_opened_map[neigbor_idx[0]][neigbor_idx[1]][2]
                 # neigbor_idx, neigbor_cost_f, neigbor_cost_g = self.open_list[[val[0] for val in self.open_list].index(self.id(neigbor_idx))]
                 if neigbor_cost_f > evaluation_f:
-                    self.open_list.remove([self.id(neigbor_idx), neigbor_cost_f, neigbor_cost_g])
+                    # mark existing opened entry as stale (lazy deletion)
                     self.is_opened_map[neigbor_idx[0]][neigbor_idx[1]][0] = 0.0
                     self.is_opened_map[neigbor_idx[0]][neigbor_idx[1]][1] = 0.0
                     self.is_opened_map[neigbor_idx[0]][neigbor_idx[1]][2] = 0.0
@@ -311,7 +332,7 @@ class Astar(Dijkstra):
                     continue
             elif self.is_closed(neigbor_idx):  # クローズドリストに含まれているか
                 neigbor_cost_f = self.is_closed_map[neigbor_idx[0]][neigbor_idx[1]][1]
-                neigbor_cost_g = self.is_closed_map[neigbor_idx[0]][neigbor_idx[1]][2]
+                # neigbor_cost_g = self.is_closed_map[neigbor_idx[0]][neigbor_idx[1]][2]
                 # its_idx, neigbor_cost_f, neigbor_cost_g = self.closed_list[[val[0] for val in self.closed_list].index(self.id(neigbor_idx))]
                 if neigbor_cost_f > evaluation_f:
                     # self.closed_list.remove([neigbor_idx, neigbor_cost_f, neigbor_cost_g])
@@ -321,7 +342,7 @@ class Astar(Dijkstra):
                 else:
                     continue
             self.parent_id_map[neigbor_idx[0]][neigbor_idx[1]] = self.id(idx)
-            self.open_list.append([self.id(neigbor_idx), evaluation_f, evaluation_f - self.__h(neigbor_idx)])
+            heapq.heappush(self.open_heap, (evaluation_f, self.id(neigbor_idx), evaluation_f - self.__h(neigbor_idx)))
             self.is_opened_map[neigbor_idx[0]][neigbor_idx[1]][0] = 1.0
             self.is_opened_map[neigbor_idx[0]][neigbor_idx[1]][1] = evaluation_f
             self.is_opened_map[neigbor_idx[0]][neigbor_idx[1]][2] = evaluation_f - self.__h(neigbor_idx)
