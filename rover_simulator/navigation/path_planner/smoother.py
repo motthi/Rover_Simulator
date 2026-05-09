@@ -37,7 +37,9 @@ class IterativeSmoother(PathSmoother):
         new_path = np.copy(path)
         for i in range(1, n_points - 1):
             new_path[i] = new_path[i] - self.alpha * (new_path[i] - path[i])
-            new_path[i] = new_path[i] - self.beta * (2 * new_path[i] - path[i - 1] - path[i + 1])
+            new_path[i] = new_path[i] - self.beta * (
+                2 * new_path[i] - path[i - 1] - path[i + 1]
+            )
         new_path[0] = path[0]
         new_path[-1] = path[-1]
         return new_path

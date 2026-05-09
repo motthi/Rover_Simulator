@@ -23,7 +23,18 @@ class ActionController(Controller):
 class RoverGymEnv(gym.Env):
     metadata = {"render.modes": ["human"]}
 
-    def __init__(self, map_file: str = None, time_interval: float = 0.1, max_steps: int = 200, lidar_range: float = 10.0, d_ang: float = np.pi/360, rover_r: float = 0.5, goal_range: float = 1.0, random_obstacles: bool = True, num_obstacles: int = 10):
+    def __init__(
+        self,
+        map_file: str = None,
+        time_interval: float = 0.1,
+        max_steps: int = 200,
+        lidar_range: float = 10.0,
+        d_ang: float = np.pi / 360,
+        rover_r: float = 0.5,
+        goal_range: float = 1.0,
+        random_obstacles: bool = True,
+        num_obstacles: int = 10,
+    ):
         super().__init__()
         self.map_file = map_file
         self.time_interval = time_interval
@@ -43,13 +54,21 @@ class RoverGymEnv(gym.Env):
         # action: [v, w]
         self.v_limit = [0.0, 2.0]
         self.w_limit = [-math.pi, math.pi]
-        self.action_space = spaces.Box(low=np.array([self.v_limit[0], self.w_limit[0]], dtype=np.float32), high=np.array([self.v_limit[1], self.w_limit[1]], dtype=np.float32), dtype=np.float32)
+        self.action_space = spaces.Box(
+            low=np.array([self.v_limit[0], self.w_limit[0]], dtype=np.float32),
+            high=np.array([self.v_limit[1], self.w_limit[1]], dtype=np.float32),
+            dtype=np.float32,
+        )
 
         # observation space: create a temporary sensor to infer observation length
-        tmp_sensor = ImaginalLiDAR(range=self.lidar_range, d_ang=self.d_ang, obstacles=[])
+        tmp_sensor = ImaginalLiDAR(
+            range=self.lidar_range, d_ang=self.d_ang, obstacles=[]
+        )
         smp_num = tmp_sensor.smp_num
         obs_len = smp_num + 3
-        self.observation_space = spaces.Box(low=-1.0, high=1.0, shape=(obs_len,), dtype=np.float32)
+        self.observation_space = spaces.Box(
+            low=-1.0, high=1.0, shape=(obs_len,), dtype=np.float32
+        )
 
         self._step_count = 0
         self._goal = None
@@ -65,7 +84,9 @@ class RoverGymEnv(gym.Env):
     def _build_obs_space(self):
         smp_num = self.rover.sensor.smp_num
         obs_len = smp_num + 3
-        self.observation_space = spaces.Box(low=-1.0, high=1.0, shape=(obs_len,), dtype=np.float32)
+        self.observation_space = spaces.Box(
+            low=-1.0, high=1.0, shape=(obs_len,), dtype=np.float32
+        )
 
     def _get_obs(self):
         # use rover.sensor to sense (uses rover.real_pose internally)
@@ -75,14 +96,24 @@ class RoverGymEnv(gym.Env):
         else:
             if lidar.ndim == 1:
                 lidar = lidar.reshape(1, -1)
-            dists = np.array([p[0] if p[0] != float('inf') else self.rover.sensor.range for p in lidar])
+            dists = np.array(
+                [
+                    p[0] if p[0] != float("inf") else self.rover.sensor.range
+                    for p in lidar
+                ]
+            )
             if len(dists) < self.rover.sensor.smp_num:
-                pad = np.ones(self.rover.sensor.smp_num - len(dists)) * self.rover.sensor.range
+                pad = (
+                    np.ones(self.rover.sensor.smp_num - len(dists))
+                    * self.rover.sensor.range
+                )
                 dists = np.concatenate([dists, pad])
             elif len(dists) > self.rover.sensor.smp_num:
                 dists = dists[: self.rover.sensor.smp_num]
 
-        dists = np.clip(dists, 0.0, self.rover.sensor.range) / float(self.rover.sensor.range)
+        dists = np.clip(dists, 0.0, self.rover.sensor.range) / float(
+            self.rover.sensor.range
+        )
 
         # goal relative in robot frame (use estimated_pose)
         est = self.rover.estimated_pose
@@ -95,10 +126,22 @@ class RoverGymEnv(gym.Env):
         gy_n = np.clip(gy / 20.0, -1.0, 1.0)
         heading = math.sin(est[2])
 
-        obs = np.concatenate([dists.astype(np.float32), np.array([gx_n, gy_n, heading], dtype=np.float32)])
+        obs = np.concatenate(
+            [
+                dists.astype(np.float32),
+                np.array([gx_n, gy_n, heading], dtype=np.float32),
+            ]
+        )
         return obs
 
-    def reset(self, seed: int | None = None, return_info: bool = False, options: dict | None = None, min_dist: float = 0.0, max_dist: float = 15.0):
+    def reset(
+        self,
+        seed: int | None = None,
+        return_info: bool = False,
+        options: dict | None = None,
+        min_dist: float = 0.0,
+        max_dist: float = 15.0,
+    ):
         # Accept `options` and `return_info` for compatibility with Gym/Gymnasium/shimmy wrappers
         if seed is not None:
             np.random.seed(seed)
@@ -112,23 +155,36 @@ class RoverGymEnv(gym.Env):
             ymin, ymax = self.obstacle_bounds[1]
             rmin, rmax = self.obstacle_r_range
             for _ in range(self.num_obstacles):
-                pos = np.array([np.random.uniform(xmin, xmax), np.random.uniform(ymin, ymax)])
+                pos = np.array(
+                    [np.random.uniform(xmin, xmax), np.random.uniform(ymin, ymax)]
+                )
                 r = float(np.random.uniform(rmin, rmax))
                 self.world.append_obstacle(CircularObstacle(pos, r))
         elif self.map_file:
             self.world.read_objects(self.map_file)
 
         # sample start/goal
-        start, goal = self.world.set_start_goal_ramdomly(min_dist=min_dist, max_dist=max_dist)
+        start, goal = self.world.set_start_goal_ramdomly(
+            min_dist=min_dist, max_dist=max_dist
+        )
         angle = np.random.uniform(-math.pi, math.pi)
 
         # create sensor linked to world obstacles
-        sensor = ImaginalLiDAR(range=self.lidar_range, d_ang=self.d_ang, obstacles=self.world.obstacles)
+        sensor = ImaginalLiDAR(
+            range=self.lidar_range, d_ang=self.d_ang, obstacles=self.world.obstacles
+        )
         history = SimpleHistory(sensor=sensor, rover_r=self.rover_r)
         localizer = ImaginalLocalizer()
         controller = ActionController()
 
-        rover = BasicRover(np.array([start[0], start[1], angle]), self.rover_r, sensor=sensor, localizer=localizer, controller=controller, history=history)
+        rover = BasicRover(
+            np.array([start[0], start[1], angle]),
+            self.rover_r,
+            sensor=sensor,
+            localizer=localizer,
+            controller=controller,
+            history=history,
+        )
         self.world.append_rover(rover)
         self.rover = rover
         self._goal = np.array([goal[0], goal[1], 0.0])
@@ -168,22 +224,27 @@ class RoverGymEnv(gym.Env):
         # collision detection via last sensing result
         if len(self.rover.history.sensing_results) > 0:
             last = self.rover.history.sensing_results[-1]
-            if hasattr(last, 'size') and last.size != 0:
-                dists = np.array([p[0] if p[0] != float('inf') else self.rover.sensor.range for p in last])
+            if hasattr(last, "size") and last.size != 0:
+                dists = np.array(
+                    [
+                        p[0] if p[0] != float("inf") else self.rover.sensor.range
+                        for p in last
+                    ]
+                )
                 if np.any(dists < self.rover.r + 1e-3):
                     reward -= 50.0
                     done = True
-                    info['collision'] = True
+                    info["collision"] = True
 
         terminated = False
         truncated = False
         if new_dist < self.goal_range:
             reward += 100.0
             terminated = True
-            info['success'] = True
+            info["success"] = True
 
         # collision
-        if 'collision' in info and info['collision']:
+        if "collision" in info and info["collision"]:
             terminated = True
 
         # timeout / max steps
@@ -193,7 +254,12 @@ class RoverGymEnv(gym.Env):
         # Return Gymnasium-compatible 5-tuple: obs, reward, terminated, truncated, info
         # record episode result for external callbacks/logging
         if terminated or truncated:
-            self._episode_results.append({'success': bool(info.get('success', False)), 'collision': bool(info.get('collision', False))})
+            self._episode_results.append(
+                {
+                    "success": bool(info.get("success", False)),
+                    "collision": bool(info.get("collision", False)),
+                }
+            )
         return obs, float(reward), bool(terminated), bool(truncated), info
 
     def pop_episode_results(self):
@@ -204,10 +270,9 @@ class RoverGymEnv(gym.Env):
         self._episode_results = []
         return res
 
-    def render(self, mode='human'):
+    def render(self, mode="human"):
         if self.rover:
             print(f"Pose: {self.rover.real_pose}, Goal: {self._goal}")
 
     def close(self):
         return None
-

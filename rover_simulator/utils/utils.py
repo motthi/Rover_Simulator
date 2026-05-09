@@ -3,7 +3,7 @@ import numpy as np
 
 
 def round_off(x, digit=0):
-    p = 10 ** digit
+    p = 10**digit
     s = np.copysign(1, x)
     return (s * x * p * 2 + 1) // 2 / p * s
 
@@ -58,7 +58,7 @@ def update_p(p, p_):
     return l2p(l)
 
 
-class GeoEllipse():
+class GeoEllipse:
     def __init__(self, x: float, y: float, angle: float, a: float, b: float) -> None:
         self.a = a
         self.b = b
@@ -70,7 +70,9 @@ class GeoEllipse():
 def cov_to_ellipse(x, cov, n):
     eig_vals, eig_vec = np.linalg.eig(cov)
     ang = math.atan2(eig_vec[:, 0][1], eig_vec[:, 0][0])
-    return GeoEllipse(x[0], x[1], ang, n * math.sqrt(eig_vals[0]), n * math.sqrt(eig_vals[1]))
+    return GeoEllipse(
+        x[0], x[1], ang, n * math.sqrt(eig_vals[0]), n * math.sqrt(eig_vals[1])
+    )
 
 
 def ellipse_collision(e1: GeoEllipse, e2: GeoEllipse) -> bool:

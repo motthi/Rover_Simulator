@@ -3,13 +3,16 @@ import numpy as np
 from scipy.stats import expon, norm
 
 
-class MotionNoise():
+class MotionNoise:
     def __init__(
-        self, r,
-        noise_per_meter: float = 5.0, noise_std: float = math.pi / 60,
-        bias_rate_nu: float = 0.1, bias_rate_omega: float = 0.1,
+        self,
+        r,
+        noise_per_meter: float = 5.0,
+        noise_std: float = math.pi / 60,
+        bias_rate_nu: float = 0.1,
+        bias_rate_omega: float = 0.1,
         expected_stuck_time: float = 1e100,
-        expected_escape_time: float = 1e-100
+        expected_escape_time: float = 1e-100,
     ) -> None:
         self.r = r
 

@@ -7,16 +7,22 @@ from matplotlib.axes import Axes
 from rover_simulator.core import Controller, Obstacle
 from rover_simulator.utils.utils import set_angle_into_range
 from rover_simulator.utils.motion import state_transition
-from rover_simulator.utils.draw import set_fig_params, draw_history_pose, draw_obstacles, draw_start, draw_goal
+from rover_simulator.utils.draw import (
+    set_fig_params,
+    draw_history_pose,
+    draw_obstacles,
+    draw_start,
+    draw_goal,
+)
 from rover_simulator.navigation.mapper import GridMapper
 
 
-if 'google.colab' in sys.modules:
+if "google.colab" in sys.modules:
     from tqdm.notebook import tqdm  # Google Colaboratory
-elif 'ipykernel' in sys.modules:
-    from tqdm.notebook import tqdm    # Jupyter Notebook
+elif "ipykernel" in sys.modules:
+    from tqdm.notebook import tqdm  # Jupyter Notebook
 else:
-    from tqdm import tqdm    # ipython, python script, ...
+    from tqdm import tqdm  # ipython, python script, ...
 
 
 class ConstantSpeedController(Controller):
@@ -34,12 +40,11 @@ class PurePursuitController(Controller):
         self.v = v
         self.L = L
 
-    def calculate_control_inputs(
-        self,
-        rover_pose: np.ndarray,
-        goal_pose: np.ndarray
-    ):
-        theta = np.arctan2(goal_pose[1] - rover_pose[1], goal_pose[0] - rover_pose[0]) - rover_pose[2]
+    def calculate_control_inputs(self, rover_pose: np.ndarray, goal_pose: np.ndarray):
+        theta = (
+            np.arctan2(goal_pose[1] - rover_pose[1], goal_pose[0] - rover_pose[0])
+            - rover_pose[2]
+        )
         theta = set_angle_into_range(theta)
         w = 2 * self.v * np.sin(theta) / self.L
         return self.v, w
@@ -60,7 +65,7 @@ class DwaController(Controller):
         predict_time: float = 1.0,
         rover_r: float = 0.0,
         rover_stuck_flag_cons: float = 0.001,
-        sensor_type: str = None  # @todo Make it easier to understand
+        sensor_type: str = None,  # @todo Make it easier to understand
     ) -> None:
         self.nu_min = nu_range[0]
         self.nu_max = nu_range[1]
@@ -87,28 +92,43 @@ class DwaController(Controller):
     def calculate_control_inputs(
         self,
         rover_pose: np.ndarray,
-        v: float, w: float, dt: float,
+        v: float,
+        w: float,
+        dt: float,
         goal_pose: np.ndarray,
         sensing_result: np.ndarray,  # @todo Only for the sensor? No compatibility with map?
-        *args, **kwargs
+        *args,
+        **kwargs,
     ):
         if len(sensing_result) != 0:
-            if self.sensor_type == 'stereo_camera':
+            if self.sensor_type == "stereo_camera":
                 sensing_result = sensing_result + rover_pose[:2]
-            elif self.sensor_type == 'lidar':
+            elif self.sensor_type == "lidar":
                 pts = []
                 for [r, th] in sensing_result:
-                    if r != float('inf'):
+                    if r != float("inf"):
                         ang = th + rover_pose[2]
-                        pt = rover_pose[:2] + np.array([r * np.cos(ang), r * np.sin(ang)])
+                        pt = rover_pose[:2] + np.array(
+                            [r * np.cos(ang), r * np.sin(ang)]
+                        )
                         pts.append(pt)
                 sensing_result = np.array(pts)
 
         min_cost = float("inf")
         best_u = [0.0, 0.0]
         vs = [self.nu_min, self.nu_max, self.omega_min, self.omega_max]
-        vd = [v - self.nu_max_acc, v + self.nu_max, w - self.omega_max_acc, w + self.omega_max_acc]
-        dw = [max(vs[0], vd[0]), min(vs[1], vd[1]), max(vs[2], vd[2]), min(vs[3], vd[3])]
+        vd = [
+            v - self.nu_max_acc,
+            v + self.nu_max,
+            w - self.omega_max_acc,
+            w + self.omega_max_acc,
+        ]
+        dw = [
+            max(vs[0], vd[0]),
+            min(vs[1], vd[1]),
+            max(vs[2], vd[2]),
+            min(vs[3], vd[3]),
+        ]
         path_primitives = []
         best_trajectory = []
         for w in np.arange(dw[2], dw[3], self.omega_delta):
@@ -118,9 +138,13 @@ class DwaController(Controller):
                 if len(trajectory) == 0:
                     continue
 
-                to_goal_cost = self.to_goal_cost_gain * self.calc_to_goal_cost(trajectory, goal_pose)
+                to_goal_cost = self.to_goal_cost_gain * self.calc_to_goal_cost(
+                    trajectory, goal_pose
+                )
                 speed_cost = self.speed_gain * (self.nu_max - trajectory[-1, 3])
-                ob_cost = self.obs_cost_gain * self.calc_obstacle_cost(trajectory, sensing_result)
+                ob_cost = self.obs_cost_gain * self.calc_obstacle_cost(
+                    trajectory, sensing_result
+                )
 
                 final_cost = to_goal_cost + speed_cost + ob_cost
 
@@ -129,7 +153,10 @@ class DwaController(Controller):
                     min_cost = final_cost
                     best_u = [v, w]
                     best_trajectory = trajectory
-                    if abs(best_u[0]) < self.rover_stuck_flag_cons and abs(x[3]) < self.rover_stuck_flag_cons:
+                    if (
+                        abs(best_u[0]) < self.rover_stuck_flag_cons
+                        and abs(x[3]) < self.rover_stuck_flag_cons
+                    ):
                         # to ensure the rover do not get stuck in
                         # best v=0 m/s (in front of an obstacle) and
                         # best omega=0 rad/s (heading to the goal with
@@ -140,7 +167,9 @@ class DwaController(Controller):
         self.best_path_log.append(best_trajectory)
         return best_u
 
-    def predict_trajectory(self, x_init: np.ndarray, dt: float, sensing_result: np.ndarray) -> np.ndarray:
+    def predict_trajectory(
+        self, x_init: np.ndarray, dt: float, sensing_result: np.ndarray
+    ) -> np.ndarray:
         x = np.array(x_init)
         trajectory = np.array(x)
         time = 0
@@ -185,7 +214,12 @@ class DwaController(Controller):
         right_check = local_ob[:, 1] <= self.rover_r / 2 + 1e-2
         bottom_check = local_ob[:, 0] >= -self.rover_r / 2 - 1e-2
         left_check = local_ob[:, 1] >= -self.rover_r / 2 - 1e-2
-        if (np.logical_and(np.logical_and(upper_check, right_check), np.logical_and(bottom_check, left_check))).any():
+        if (
+            np.logical_and(
+                np.logical_and(upper_check, right_check),
+                np.logical_and(bottom_check, left_check),
+            )
+        ).any():
             return float("Inf")
 
         min_r = np.min(r)
@@ -193,7 +227,8 @@ class DwaController(Controller):
 
     def animate(
         self,
-        xlim: list[float] = None, ylim: list[float] = None,
+        xlim: list[float] = None,
+        ylim: list[float] = None,
         figsize: tuple[float, float] = (8, 8),
         obstacles: list[Obstacle] = None,
         start_pos: np.ndarray = None,
@@ -201,7 +236,7 @@ class DwaController(Controller):
         rover_poses: list[np.ndarray] = None,
         expand_dist: float = 0.0,
         end_step=None,
-        axes_setting: list = [0.09, 0.07, 0.85, 0.9]
+        axes_setting: list = [0.09, 0.07, 0.85, 0.9],
     ) -> None:
         self.fig, ax = set_fig_params(figsize, xlim, ylim, axes_setting)
         draw_obstacles(ax, obstacles, expand_dist)
@@ -213,21 +248,23 @@ class DwaController(Controller):
         animation_len = end_step
         pbar = tqdm(total=animation_len)
         self.ani = anm.FuncAnimation(
-            self.fig, self.animate_one_step, animation_len, interval=100, repeat=False, fargs=(ax, elems, xlim, ylim, rover_poses, pbar),
+            self.fig,
+            self.animate_one_step,
+            animation_len,
+            interval=100,
+            repeat=False,
+            fargs=(ax, elems, xlim, ylim, rover_poses, pbar),
         )
         plt.close()
 
-    def animate_one_step(self, i: int, ax: Axes, elems: list, xlim: list, ylim: list, rover_poses, pbar):
+    def animate_one_step(
+        self, i: int, ax: Axes, elems: list, xlim: list, ylim: list, rover_poses, pbar
+    ):
         while elems:
             elems.pop().remove()
 
         elems.append(
-            ax.text(
-                xlim[0] * 0.01,
-                ylim[1] * 1.02,
-                f"steps = {i}",
-                fontsize=10
-            )
+            ax.text(xlim[0] * 0.01, ylim[1] * 1.02, f"steps = {i}", fontsize=10)
         )
 
         draw_history_pose(ax, elems, rover_poses, self.rover_r, "black", i)
@@ -237,16 +274,22 @@ class DwaController(Controller):
             self.draw_best_path(ax, elems, self.best_path_log[i])
         pbar.update(1)
 
-    def draw_path_primitives(self, ax: Axes, elems: list, path_primitives: list[list[np.ndarray]]) -> None:
+    def draw_path_primitives(
+        self, ax: Axes, elems: list, path_primitives: list[list[np.ndarray]]
+    ) -> None:
         for path_primitive in path_primitives:
             x = path_primitive[0]
             dt = path_primitive[1]
             trajectory = self.predict_trajectory(x, dt, [])
             if len(trajectory) == 0:
                 continue
-            elems += ax.plot(trajectory[:, 0], trajectory[:, 1], color="cyan", alpha=0.5)
+            elems += ax.plot(
+                trajectory[:, 0], trajectory[:, 1], color="cyan", alpha=0.5
+            )
 
-    def draw_best_path(self, ax: Axes, elems: list, best_trajectory: list[np.ndarray]) -> None:
+    def draw_best_path(
+        self, ax: Axes, elems: list, best_trajectory: list[np.ndarray]
+    ) -> None:
         if len(best_trajectory) == 0:
             return
         elems += ax.plot(best_trajectory[:, 0], best_trajectory[:, 1], color="red")
@@ -269,37 +312,51 @@ class PathFollower(DwaController):
         rover_stuck_flag_cons: float = 0.001,
     ) -> None:
         super().__init__(
-            nu_range=v_range, omega_range=w_range,
-            nu_delta=v_delta, omega_delta=w_delta,
-            nu_max_acc=v_max_acc, omega_max_acc=w_max_acc,
-            to_goal_cost_gain=to_goal_cost_gain, speed_gain=speed_gain, obs_cost_gain=obs_cost_gain,
-            predict_time=predict_time, rover_r=rover_r,
-            rover_stuck_flag_cons=rover_stuck_flag_cons
+            nu_range=v_range,
+            omega_range=w_range,
+            nu_delta=v_delta,
+            omega_delta=w_delta,
+            nu_max_acc=v_max_acc,
+            omega_max_acc=w_max_acc,
+            to_goal_cost_gain=to_goal_cost_gain,
+            speed_gain=speed_gain,
+            obs_cost_gain=obs_cost_gain,
+            predict_time=predict_time,
+            rover_r=rover_r,
+            rover_stuck_flag_cons=rover_stuck_flag_cons,
         )
 
     def calculate_control_inputs(
         self,
         rover_pose: np.ndarray,
-        v: float, w: float, dt: float,
+        v: float,
+        w: float,
+        dt: float,
         goal_pose: np.ndarray,
         obstacles: list[Obstacle],
-        *args, **kwargs
+        *args,
+        **kwargs,
     ):
-        angle_to_goal = np.arctan2(goal_pose[1] - rover_pose[1], goal_pose[0] - rover_pose[0]) - rover_pose[2]
+        angle_to_goal = (
+            np.arctan2(goal_pose[1] - rover_pose[1], goal_pose[0] - rover_pose[0])
+            - rover_pose[2]
+        )
         angle_to_goal = set_angle_into_range(angle_to_goal)
         if angle_to_goal > np.pi / 4:
             return 0.0, self.omega_max
         elif angle_to_goal < -np.pi / 4:
             return 0.0, self.omega_min
         else:
-            return super().calculate_control_inputs(rover_pose, v, w, dt, goal_pose, obstacles)
+            return super().calculate_control_inputs(
+                rover_pose, v, w, dt, goal_pose, obstacles
+            )
 
 
 class ArcPathController(Controller):
     def __init__(
         self,
         v_range: list[float] = [0.0, 2.0],
-        w_range: list[float] = [-np.pi/6, np.pi/6],
+        w_range: list[float] = [-np.pi / 6, np.pi / 6],
         dv: float = 0.5,
         branch_num: int = 5,
         branch_depth: int = 3,
@@ -310,7 +367,7 @@ class ArcPathController(Controller):
         rover_r: float = 0.0,
         stuck_flag_cons: float = 0.001,
         stuck_cnt_max: int = 100,
-        dt: float = 0.1
+        dt: float = 0.1,
     ) -> None:
         self.v_min = v_range[0]
         self.v_max = v_range[1]
@@ -344,16 +401,23 @@ class ArcPathController(Controller):
         dt: float,
         goal_pose: np.ndarray,
         mapper: GridMapper,
-        *args, **kwargs
+        *args,
+        **kwargs,
     ):
         min_cost = float("inf")
         best_u = [0.0, 0.0]
         rover_idx = mapper.poseToIndex(rover_pose)
-        if mapper.isOutOfBounds(rover_idx) or mapper.map[rover_idx[0], rover_idx[1]] > 0.5:
+        if (
+            mapper.isOutOfBounds(rover_idx)
+            or mapper.map[rover_idx[0], rover_idx[1]] > 0.5
+        ):
             mapper.map[rover_idx[0], rover_idx[1]] = 0.1
 
         traj_list = transform_traj_list(self.path_primitives, rover_pose)
-        angle_to_goal = np.arctan2(goal_pose[1] - rover_pose[1], goal_pose[0] - rover_pose[0]) - rover_pose[2]
+        angle_to_goal = (
+            np.arctan2(goal_pose[1] - rover_pose[1], goal_pose[0] - rover_pose[0])
+            - rover_pose[2]
+        )
         angle_to_goal = set_angle_into_range(angle_to_goal)
 
         curr_dist_to_wpt = np.linalg.norm(rover_pose[:2] - goal_pose[:2])
@@ -386,11 +450,15 @@ class ArcPathController(Controller):
                 if is_collision:
                     continue
 
-                rw_cost = 5 * np.abs(traj[0, 4]) if traj[0, 3] < 1e-3 else 0.0  # it is better to select the path which does not excute rotation at first.
+                rw_cost = (
+                    5 * np.abs(traj[0, 4]) if traj[0, 3] < 1e-3 else 0.0
+                )  # it is better to select the path which does not excute rotation at first.
 
                 # speed_cost = self.speed_gain * (self.v_max - traj[-1, 3])
                 # ob_cost = self.obs_cost_gain * self.calc_obstacle_cost(trajectory, obstacle_list)
-                to_goal_cost = self.to_goal_cost_gain * self.calc_dist_to_goal_cost(traj, goal_pose)
+                to_goal_cost = self.to_goal_cost_gain * self.calc_dist_to_goal_cost(
+                    traj, goal_pose
+                )
                 # final_cost = to_goal_cost + speed_cost + ob_cost
                 final_cost = to_goal_cost + rw_cost  # + speed_cost
 
@@ -461,7 +529,12 @@ class ArcPathController(Controller):
         right_check = local_ob[:, 1] <= self.rover_r / 2
         bottom_check = local_ob[:, 0] >= -self.rover_r / 2
         left_check = local_ob[:, 1] >= -self.rover_r / 2
-        if (np.logical_and(np.logical_and(upper_check, right_check), np.logical_and(bottom_check, left_check))).any():
+        if (
+            np.logical_and(
+                np.logical_and(upper_check, right_check),
+                np.logical_and(bottom_check, left_check),
+            )
+        ).any():
             return float("Inf")
 
         min_r = np.min(r)
@@ -474,12 +547,12 @@ class ArcPathController(Controller):
         fig, ax = plt.subplots()
         for traj in traj_list:
             ax.plot(traj[:, 0], traj[:, 1])
-        ax.set_aspect('equal')
-        ax.set_xlabel('X [m]')
-        ax.set_ylabel('Y [m]')
+        ax.set_aspect("equal")
+        ax.set_xlabel("X [m]")
+        ax.set_ylabel("Y [m]")
         if src:
             fig.tight_layout()
-            fig.savefig(src, dpi=300, bbox_inches='tight', pad_inches=0.05)
+            fig.savefig(src, dpi=300, bbox_inches="tight", pad_inches=0.05)
             plt.close()
         else:
             plt.show()
@@ -487,8 +560,10 @@ class ArcPathController(Controller):
     def generate_path_primitives(self, dt):
         def w_lists(depth, max_depth, dt):
             w_values = np.linspace(self.w_min, self.w_max, self.branch_num)
-            scaled_space = np.sign(w_values) * np.abs(w_values)**2
-            scaled_space = (scaled_space - scaled_space.min()) / (scaled_space.max() - scaled_space.min())
+            scaled_space = np.sign(w_values) * np.abs(w_values) ** 2
+            scaled_space = (scaled_space - scaled_space.min()) / (
+                scaled_space.max() - scaled_space.min()
+            )
             w_values = scaled_space * (self.w_max - self.w_min) + self.w_min
 
             if depth == max_depth:
@@ -500,6 +575,7 @@ class ArcPathController(Controller):
                 for sub_list in sub_w_lists:
                     w_list.append([w] + sub_list)
             return w_list
+
         rover_pose = np.array([0, 0, 0])
         traj_list = []
 
@@ -529,7 +605,9 @@ def transform_traj_list(path_primitives, pose):
     tho = pose[2]
     rot = np.array([[np.cos(tho), -np.sin(tho)], [np.sin(tho), np.cos(tho)]])
     xy_rotated = rot @ traj_list[:, :, 0:2].reshape(-1, 2).T
-    traj_list[:, :, :2] = xy_rotated.T.reshape(traj_list.shape[0], traj_list.shape[1], 2)
+    traj_list[:, :, :2] = xy_rotated.T.reshape(
+        traj_list.shape[0], traj_list.shape[1], 2
+    )
     traj_list[:, :, :2] += pose[:2]
     traj_list[:, :, 2] = traj_list[:, :, 2] + tho
     return traj_list

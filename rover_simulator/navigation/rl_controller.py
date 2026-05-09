@@ -1,4 +1,3 @@
-import numpy as np
 from stable_baselines3 import PPO
 from rover_simulator.core import Controller
 
@@ -10,7 +9,8 @@ class RLController(Controller):
       controller = RLController(model_path="path/to/model.zip", env=env)
       rover.controller = controller
       controller.attach_env(env)
-"""
+    """
+
     def __init__(self, model_path: str | None = None, env=None):
         super().__init__()
         self.model = None
