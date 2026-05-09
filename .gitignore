@@ -2,9 +2,11 @@ __pycache__
 .ipynb_checkpoints
 .vscode
 .virtual_documents
+.pytest_cache
 Untitled*
 verification
 sourcetrail
+rl_logs
 cmotion.c
 *.gif
 *.png
@@ -16,3 +18,5 @@ cmotion.c
 *.cp39*
 *.o
 *.so
+*.csv
+*.zip

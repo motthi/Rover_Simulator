@@ -18,6 +18,7 @@ from rover_simulator.navigation.mapper import GridMapper
 from rover_simulator.navigation.path_planner.grid_base import GridBasePathPlanning
 from rover_simulator.navigation.controller import DwaController
 from rover_simulator.navigation.sensing_planner import SimpleSensingPlanner
+from rover_simulator.navigation.rl_controller import RLController
 
 if 'google.colab' in sys.modules:
     from tqdm.notebook import tqdm  # Google Colaboratory
@@ -187,6 +188,89 @@ class KalmanRover(BasicRover):
 
         # Localization
         self.estimated_pose = self.localizer.estimate_pose(self.estimated_pose, v, w, time_interval)
+
+
+class RLBasicRover(BasicRover):
+    """Rover subclass that exposes `_get_obs()` for RLController and
+    can be constructed with a `model_path` so the RLController is attached
+    automatically. The rover keeps a `goal` attribute used to compute
+    relative goal coordinates in the observation.
+    """
+    def __init__(
+        self,
+        pose: np.ndarray,
+        radius: float,
+        sensor: Sensor = None,
+        localizer: Localizer = None,
+        path_planner: PathPlanner = None,
+        controller: Controller = None,
+        sensing_planner: SensingPlanner = SensingPlanner(),
+        mapper: Mapper = None,
+        collision_detector: CollisionDetector = IgnoreCollision(),
+        history: History = None,
+        color: str = "black",
+        waypoint_color: str = 'blue',
+        goal: np.ndarray = None,
+        model_path: str | None = None,
+    ) -> None:
+        super().__init__(
+            pose=pose, radius=radius,
+            sensor=sensor, localizer=localizer, path_planner=path_planner,
+            controller=controller, sensing_planner=sensing_planner,
+            mapper=mapper, collision_detector=collision_detector,
+            history=history, color=color, waypoint_color=waypoint_color
+        )
+        self.goal = goal if goal is not None else np.array([0.0, 0.0, 0.0])
+
+        # If a model path is provided and no controller passed, create RLController
+        if model_path is not None and self.controller is None:
+            rl_ctrl = RLController(model_path=model_path)
+            rl_ctrl.attach_env(self)
+            self.controller = rl_ctrl
+
+        # If a controller is provided, attach this rover as env if possible
+        if self.controller is not None and hasattr(self.controller, 'attach_env'):
+            try:
+                self.controller.attach_env(self)
+            except Exception:
+                pass
+
+    def _get_obs(self):
+        # Build observation compatible with RoverGymEnv/_get_obs
+        sensor = self.sensor
+        if sensor is None:
+            # fallback empty observation
+            return np.zeros(3, dtype=np.float32)
+
+        lidar = sensor.sense(self)
+        if getattr(lidar, 'size', 0) == 0:
+            dists = np.ones(sensor.smp_num) * sensor.range
+        else:
+            if lidar.ndim == 1:
+                lidar2 = lidar.reshape(1, -1)
+            else:
+                lidar2 = lidar
+            dists = np.array([p[0] if p[0] != float('inf') else sensor.range for p in lidar2])
+            if len(dists) < sensor.smp_num:
+                pad = np.ones(sensor.smp_num - len(dists)) * sensor.range
+                dists = np.concatenate([dists, pad])
+            elif len(dists) > sensor.smp_num:
+                dists = dists[: sensor.smp_num]
+
+        dists = np.clip(dists, 0.0, sensor.range) / float(sensor.range)
+
+        est = self.estimated_pose
+        dx = self.goal[0] - est[0]
+        dy = self.goal[1] - est[1]
+        th = -est[2]
+        gx = np.cos(th) * dx - np.sin(th) * dy
+        gy = np.sin(th) * dx + np.cos(th) * dy
+        gx_n = np.clip(gx / 20.0, -1.0, 1.0)
+        gy_n = np.clip(gy / 20.0, -1.0, 1.0)
+        heading = np.sin(est[2])
+
+        obs = np.concatenate([dists.astype(np.float32), np.array([gx_n, gy_n, heading], dtype=np.float32)])
+        return obs
 
 
 class FollowRover(DwaRover):
