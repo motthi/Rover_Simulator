@@ -11,11 +11,9 @@ class RLController(Controller):
       controller.attach_env(env)
     """
 
-    def __init__(self, model_path: str | None = None, env=None):
+    def __init__(self, env=None):
         super().__init__()
         self.model = None
-        if model_path:
-            self.model = PPO.load(model_path)
         self.env = env
 
     def attach_env(self, env):
@@ -31,3 +29,6 @@ class RLController(Controller):
         v = float(action[0])
         w = float(action[1])
         return v, w
+
+    def set_model(self, model):
+        self.model = model
