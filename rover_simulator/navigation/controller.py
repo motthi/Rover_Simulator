@@ -299,11 +299,11 @@ class ArcPathController(Controller):
     def __init__(
         self,
         v_range: list[float] = [0.0, 2.0],
-        w_range: list[float] = [-2 * np.pi, 2 * np.pi],
+        w_range: list[float] = [-np.pi/6, np.pi/6],
         dv: float = 0.5,
-        branch_num: int = 11,
-        branch_depth: int = 5,
-        branch_dt: float = 3,
+        branch_num: int = 5,
+        branch_depth: int = 3,
+        branch_dt: float = 0.5,
         to_goal_cost_gain: float = 0.15,
         speed_gain: float = 1.0,
         obs_cost_gain: float = 1.0,
@@ -346,7 +346,6 @@ class ArcPathController(Controller):
         mapper: GridMapper,
         *args, **kwargs
     ):
-        from tqdm import tqdm
         min_cost = float("inf")
         best_u = [0.0, 0.0]
         rover_idx = mapper.poseToIndex(rover_pose)
